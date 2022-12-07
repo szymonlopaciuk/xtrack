@@ -15,25 +15,18 @@ from xobjects.hybrid_class import _build_xofields_dict
 from .internal_record import RecordIdentifier, RecordIndex, generate_get_record
 
 start_per_part_block = """
-   int64_t const n_part = LocalParticle_get__num_active_particles(part0); //only_for_context cpu_serial cpu_openmp
-   #pragma omp parallel for                                       //only_for_context cpu_openmp
-   for (int jj=0; jj<n_part; jj+=!!CHUNK_SIZE!!){                 //only_for_context cpu_serial cpu_openmp
-    //#pragma omp simd
-    for (int iii=0; iii<!!CHUNK_SIZE!!; iii++){                   //only_for_context cpu_serial cpu_openmp
-      int const ii = iii+jj;                                      //only_for_context cpu_serial cpu_openmp
-      if (ii<n_part){                                             //only_for_context cpu_serial cpu_openmp
+    int64_t const n_part = LocalParticle_get__num_active_particles(part0); //only_for_context cpu_serial cpu_openmp
+    #pragma omp parallel for                                               //only_for_context cpu_openmp
+    for (int ii = 0; ii < n_part; ii++){                                   //only_for_context cpu_serial cpu_openmp
+        LocalParticle lpart = *part0;  //only_for_context cpu_serial cpu_openmp
+        LocalParticle* part = &lpart;  //only_for_context cpu_serial cpu_openmp
+        part->ipart = ii;              //only_for_context cpu_serial cpu_openmp
 
-        LocalParticle lpart = *part0;//only_for_context cpu_serial cpu_openmp
-        LocalParticle* part = &lpart;//only_for_context cpu_serial cpu_openmp
-        part->ipart = ii;            //only_for_context cpu_serial cpu_openmp
-
-        LocalParticle* part = part0;//only_for_context opencl cuda
-""".replace("!!CHUNK_SIZE!!", "128")
+        LocalParticle* part = part0;   //only_for_context opencl cuda
+"""
 
 end_part_part_block = """
-     } //only_for_context cpu_serial cpu_openmp
-    }  //only_for_context cpu_serial cpu_openmp
-   }   //only_for_context cpu_serial cpu_openmp
+    }   //only_for_context cpu_serial cpu_openmp
 """
 
 def _handle_per_particle_blocks(sources, local_particle_src):
