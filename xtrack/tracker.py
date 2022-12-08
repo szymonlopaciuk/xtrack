@@ -716,11 +716,15 @@ class Tracker:
                              int64_t offset_tbt_monitor,
                 /*gpuglmem*/ int8_t* io_buffer){
 
+            int64_t part_capacity = ParticlesData_get__capacity(particles);
 
+            #pragma omp parallel for  //only_for_context cpu_openmp
+            for(int part_id = 0; part_id < part_capacity; part_id++){  //only_for_context cpu_openmp
+            
             LocalParticle lpart;
             lpart.io_buffer = io_buffer;
-
-            int64_t part_id = 0;                    //only_for_context cpu_serial cpu_openmp
+            
+            int64_t part_id = 0;                    //only_for_context cpu_serial
             int64_t part_id = blockDim.x * blockIdx.x + threadIdx.x; //only_for_context cuda
             int64_t part_id = get_global_id(0);                    //only_for_context opencl
 
@@ -730,7 +734,6 @@ class Tracker:
             ParticlesMonitorData tbt_monitor =
                             (ParticlesMonitorData) tbt_mon_pointer;
 
-            int64_t part_capacity = ParticlesData_get__capacity(particles);
             if (part_id<part_capacity){
             Particles_to_LocalParticle(particles, &lpart, part_id);
 
@@ -811,9 +814,10 @@ class Tracker:
                 }
             } // for turns
 
-            LocalParticle_to_Particles(&lpart, particles, part_id, 1);
+            //LocalParticle_to_Particles(&lpart, particles, part_id, 1);
 
             }// if partid
+            }// end for part_id //only_for_context cpu_openmp
         }//kernel
         """
         )

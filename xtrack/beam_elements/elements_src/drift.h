@@ -24,7 +24,6 @@ void Drift_track_local_particle(DriftData el, LocalParticle* part0){
         LocalParticle_add_to_s(part, length);
         LocalParticle_add_to_zeta(part, length * dzeta );
     //end_per_particle_block
-
 }
 
 #endif

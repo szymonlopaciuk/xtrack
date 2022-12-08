@@ -15,18 +15,18 @@ from xobjects.hybrid_class import _build_xofields_dict
 from .internal_record import RecordIdentifier, RecordIndex, generate_get_record
 
 start_per_part_block = """
-    int64_t const n_part = LocalParticle_get__num_active_particles(part0); //only_for_context cpu_serial cpu_openmp
-    #pragma omp parallel for                                               //only_for_context cpu_openmp
-    for (int ii = 0; ii < n_part; ii++){                                   //only_for_context cpu_serial cpu_openmp
-        LocalParticle lpart = *part0;  //only_for_context cpu_serial cpu_openmp
-        LocalParticle* part = &lpart;  //only_for_context cpu_serial cpu_openmp
-        part->ipart = ii;              //only_for_context cpu_serial cpu_openmp
+    int64_t const n_part = LocalParticle_get__num_active_particles(part0); //only_for_context cpu_serial
+    for (int ii = 0; ii < n_part; ii++){                                   //only_for_context cpu_serial
+        LocalParticle lpart = *part0;  //only_for_context cpu_serial
+        LocalParticle* part = &lpart;  //only_for_context cpu_serial
+        part->ipart = ii;              //only_for_context cpu_serial
 
         LocalParticle* part = part0;   //only_for_context opencl cuda
+        LocalParticle* part = part0;   //only_for_context cpu_openmp
 """
 
 end_part_part_block = """
-    }   //only_for_context cpu_serial cpu_openmp
+    }   //only_for_context cpu_serial
 """
 
 def _handle_per_particle_blocks(sources, local_particle_src):
