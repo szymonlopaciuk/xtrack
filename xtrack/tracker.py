@@ -718,10 +718,14 @@ class Tracker:
 
             int64_t part_capacity = ParticlesData_get__capacity(particles);
 
+            LocalParticle llpart;
+            llpart.io_buffer = io_buffer;
+            Particles_to_LocalParticle(particles, &llpart, 0);
+
             #pragma omp parallel for  //only_for_context cpu_openmp
             for(int part_id = 0; part_id < part_capacity; part_id++){  //only_for_context cpu_openmp
             
-            LocalParticle lpart;
+            LocalParticle lpart = llpart;
             lpart.io_buffer = io_buffer;
             
             int64_t part_id = 0;                    //only_for_context cpu_serial
@@ -735,7 +739,7 @@ class Tracker:
                             (ParticlesMonitorData) tbt_mon_pointer;
 
             if (part_id<part_capacity){
-            Particles_to_LocalParticle(particles, &lpart, part_id);
+            lpart.ipart = part_id;
 
             int64_t isactive = check_is_active(&lpart);
 
