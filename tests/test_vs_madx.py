@@ -143,6 +143,10 @@ def test_twiss_and_survey(test_context):
                 for nn in['s', 'x','px','y','py', 'zeta','delta','ptau',
                         'betx','bety','alfx','alfy','gamx','gamy','dx','dpx','dy',
                         'dpy','mux','muy', 'name']:
+                    print(f'==========> now testing {nn}')
+                    if not np.all(twxt[nn][1:] == twxt_exit[nn]):
+                        print(f'lhs = {twxt[nn][1:]}')
+                        print(f'rhs = {twxt_exit[nn]}')
                     assert np.all(twxt[nn][1:] == twxt_exit[nn])
 
             # Twiss a part of the machine
