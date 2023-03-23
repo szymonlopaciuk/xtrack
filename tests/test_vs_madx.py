@@ -145,8 +145,9 @@ def test_twiss_and_survey(test_context):
                         'dpy','mux','muy', 'name']:
                     print(f'==========> now testing {nn}')
                     if not np.all(twxt[nn][1:] == twxt_exit[nn]):
-                        print(f'lhs = {twxt[nn][1:]}')
-                        print(f'rhs = {twxt_exit[nn]}')
+                        with np.printoptions(threshold=np.inf):
+                            print(f'lhs = {twxt[nn][1:]}')
+                            print(f'rhs = {twxt_exit[nn]}')
                     assert np.all(twxt[nn][1:] == twxt_exit[nn])
 
             # Twiss a part of the machine
