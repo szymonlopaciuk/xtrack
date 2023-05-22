@@ -21,35 +21,7 @@ mad2.call('lhc_optics.madx')
 mad2.beam()
 mad2.sequence.lhcb1.use()
 
-ml = MadLoader(mad2.sequence.lhcb1, enable_slicing=False)
-
-ml.slicing_strategies = [
-    ml.make_slicing_strategy(
-        name_regex=r'(mqt|mqtli|mqtlh)\..*',
-        slicing_strategy=TeapotSlicing(2),
-    ),
-    ml.make_slicing_strategy(
-        name_regex=r'(mbx|mbrb|mbrc|mbrs|mbh|mqwa|mqwb|mqy|mqm|mqmc|mqml)\..*',
-        slicing_strategy=TeapotSlicing(4),
-    ),
-    ml.make_slicing_strategy(
-        madx_type='mqxb',
-        slicing_strategy=TeapotSlicing(16),
-    ),
-    ml.make_slicing_strategy(
-        madx_type='mqxa',
-        slicing_strategy=TeapotSlicing(16),
-    ),
-    ml.make_slicing_strategy(
-        madx_type='mq',
-        slicing_strategy=TeapotSlicing(2),
-    ),
-    ml.make_slicing_strategy(
-        madx_type='mb',
-        slicing_strategy=TeapotSlicing(2),
-    ),
-    ml.make_slicing_strategy(TeapotSlicing(1)),  # Default catch-all as in MAD-X
-]
+ml = MadLoader(mad2.sequence.lhcb1, allow_thick=True)
 line_xt = ml.make_line()
 line_xt.cycle(name_first_element='ip3')
 line_xt.particle_ref = xp.Particles(mass0=xp.PROTON_MASS_EV, q0=1, energy0=7e12)
