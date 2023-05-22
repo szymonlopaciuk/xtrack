@@ -837,7 +837,7 @@ class MadLoader:
                 [
                     self.Builder(
                         mad_el.name,
-                        self.classes.ThickCombinedFunctionDipole,
+                        self.classes.SimpleThickQuadrupole,
                         k1=k1,
                         length=mad_el.l,
                     ),
@@ -872,14 +872,22 @@ class MadLoader:
             else:
                 k0l = mad_el.angle * slice_weight
 
-
-            bend_thin = self.Builder(
-                name_pattern.format(mad_el.name),
-                self.classes.SimpleThinBend,
-                knl=[k0l],
-                hxl=hxl,
-                length=mad_el.l * slice_weight,
-            )
+            if not mad_el.k1:
+                bend_thin = self.Builder(
+                    name_pattern.format(mad_el.name),
+                    self.classes.SimpleThinBend,
+                    knl=[k0l],
+                    hxl=hxl,
+                    length=mad_el.l * slice_weight,
+                )
+            else:
+                bend_thin = self.Builder(
+                    name_pattern.format(mad_el.name),
+                    self.classes.Multipole,
+                    knl=[k0l, mad_el.k1 * mad_el.l * slice_weight],
+                    hxl=[hxl],
+                    length=mad_el.l * slice_weight,
+                )
 
             return bend_thin
 
@@ -900,12 +908,13 @@ class MadLoader:
         if mad_el.angle:
             h = mad_el.angle / mad_el.l
         else:
-            h = mad_el.k0
+            h = 0.0
+
         return [
             self.Builder(
                 mad_el.name,
-                self.classes.ThickCombinedFunctionDipole,
-                k0=mad_el.k0,
+                self.classes.SimpleThickBend,
+                k0=mad_el.k0 or h,
                 h=h,
                 length=mad_el.l,
             ),
