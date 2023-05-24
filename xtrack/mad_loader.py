@@ -634,7 +634,7 @@ class MadLoader:
         expressions_for_element_types=None,
         classes=xtrack,
         replace_in_expr=None,
-        enable_slicing=False,
+        allow_thick=False,
         slicing_strategies=None,
     ):
 
@@ -656,7 +656,7 @@ class MadLoader:
         self._drift = self.classes.Drift
         self.ignore_madtypes = ignore_madtypes
 
-        self.enable_slicing = enable_slicing
+        self.allow_thick = allow_thick
         self.slicing_strategies = slicing_strategies or []
 
     def iter_elements(self, madeval=None):
@@ -826,19 +826,19 @@ class MadLoader:
                 )
             return element
 
-        if mad_el.l:
+        if mad_el.l and self.allow_thick:
             if mad_el.k1s:
                 tilt = -np.atan2(mad_el.k1s, mad_el.k1) / 2
-                knl1 = 0.5 * np.sqrt(mad_el.k1s ** 2 + mad_el.k1 ** 2) * mad_el.l
+                k1 = 0.5 * np.sqrt(mad_el.k1s ** 2 + mad_el.k1 ** 2)
             else:
                 tilt = None
-                knl1 = mad_el.k1 * mad_el.l
+                k1 = mad_el.k1
             return self.convert_thin_element(
                 [
                     self.Builder(
                         mad_el.name,
                         self.classes.ThickCombinedFunctionDipole,
-                        knl=[0, knl1],
+                        k1=k1,
                         length=mad_el.l,
                     ),
                 ],
@@ -897,22 +897,25 @@ class MadLoader:
         return sequence
 
     def _make_thick_bend(self, mad_el):
-        knl0 = mad_el.k0 * mad_el.l
+        if mad_el.angle:
+            h = mad_el.angle / mad_el.l
+        else:
+            h = mad_el.k0
         return [
             self.Builder(
                 mad_el.name,
                 self.classes.ThickCombinedFunctionDipole,
-                knl=[knl0],
-                hxl=mad_el.angle or knl0,
+                k0=mad_el.k0,
+                h=h,
                 length=mad_el.l,
             ),
         ]
 
     def convert_rbend(self, mad_el):
-        if self.enable_slicing:
-            sequence = self._slice_bend_thin(mad_el)
-        else:
+        if self.allow_thick:
             sequence = self._make_thick_bend(mad_el)
+        else:
+            sequence = self._slice_bend_thin(mad_el)
 
         # Add the dipole edge(s)
         new_h = mad_el.k0 or mad_el.angle / mad_el.l
@@ -946,10 +949,10 @@ class MadLoader:
         return self.convert_thin_element(sequence, mad_el)
 
     def convert_sbend(self, mad_el):
-        if self.enable_slicing:
-            sequence = self._slice_bend_thin(mad_el)
-        else:
+        if self.allow_thick:
             sequence = self._make_thick_bend(mad_el)
+        else:
+            sequence = self._slice_bend_thin(mad_el)
 
         new_h = mad_el.k0 or mad_el.angle / mad_el.l
 
@@ -990,10 +993,13 @@ class MadLoader:
                 length=mad_el.l * elem_weight,
             )
 
-        if self.enable_slicing:
+        try:
             slicing_strategy = self.get_slicing_strategy(mad_el)
-        else:
-            slicing_strategy = UniformSlicing(1)
+        except ValueError:
+            if self.allow_thick:
+                slicing_strategy = UniformSlicing(1)
+            else:
+                raise
 
         sequence = []
         drifts, sexts = 1, 1
@@ -1018,10 +1024,13 @@ class MadLoader:
                 length=mad_el.l * elem_weight,
             )
 
-        if self.enable_slicing:
+        try:
             slicing_strategy = self.get_slicing_strategy(mad_el)
-        else:
-            slicing_strategy = UniformSlicing(1)
+        except ValueError:
+            if self.allow_thick:
+                slicing_strategy = UniformSlicing(1)
+            else:
+                raise
 
         sequence = []
         drifts, octs = 1, 1
@@ -1179,10 +1188,13 @@ class MadLoader:
                 [_make_thin_kicker_slice(1, '{}')], mad_el
             )
 
-        if self.enable_slicing:
+        try:
             slicing_strategy = self.get_slicing_strategy(mad_el)
-        else:
-            slicing_strategy = UniformSlicing(1)
+        except ValueError:
+            if self.allow_thick:
+                slicing_strategy = UniformSlicing(1)
+            else:
+                raise
 
         sequence = []
         drifts, kicks = 1, 1
@@ -1222,10 +1234,13 @@ class MadLoader:
                 [_make_thin_hkicker_slice(1, '{}')], mad_el
             )
 
-        if self.enable_slicing:
+        try:
             slicing_strategy = self.get_slicing_strategy(mad_el)
-        else:
-            slicing_strategy = UniformSlicing(1)
+        except ValueError:
+            if self.allow_thick:
+                slicing_strategy = UniformSlicing(1)
+            else:
+                raise
 
         sequence = []
         drifts, hkicks = 1, 1
@@ -1263,10 +1278,13 @@ class MadLoader:
                 [_make_thin_vkicker_slice(1, '{}')], mad_el
             )
 
-        if self.enable_slicing:
+        try:
             slicing_strategy = self.get_slicing_strategy(mad_el)
-        else:
-            slicing_strategy = UniformSlicing(1)
+        except ValueError:
+            if self.allow_thick:
+                slicing_strategy = UniformSlicing(1)
+            else:
+                raise
 
         sequence = []
         drifts, vkicks = 1, 1

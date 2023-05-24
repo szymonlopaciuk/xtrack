@@ -737,8 +737,9 @@ class ThickCombinedFunctionDipole(BeamElement):
     isthick = True
 
     _xofields={
-        'knl': xo.Float64[2],
-        'hxl': xo.Float64,
+        'k0': xo.Float64,
+        'k1': xo.Float64,
+        'h': xo.Float64,
         'length': xo.Float64,
     }
 
@@ -746,24 +747,10 @@ class ThickCombinedFunctionDipole(BeamElement):
         _pkg_root.joinpath('beam_elements/elements_src/combinedfunctiondipole.h')]
 
 
-    def __init__(self, knl=None, hxl=0.0, **kwargs):
+    def __init__(self, **kwargs):
         if kwargs.get('length', 0.0) == 0.0:
             raise ValueError("A thick element must have a length.")
 
-        if knl is None:
-            knl = np.zeros(2)
-
-        if '_xobject' in kwargs.keys() and kwargs['_xobject'] is not None:
-            self.xoinitialize(**kwargs)
-            return
-
-        if len(knl) == 1:
-            knl = np.array([knl[0], 0.0])
-        elif len(knl) != 2:
-            raise ValueError("For a quadrupole, len(knl) must be 2.")
-
-        kwargs["knl"] = knl
-        kwargs["hxl"] = hxl
         self.xoinitialize(**kwargs)
 
     @property
@@ -790,7 +777,7 @@ class ThickCombinedFunctionDipole(BeamElement):
 
     def get_backtrack_element(self, _context=None, _buffer=None, _offset=None):
         ctx2np = self._buffer.context.nparray_from_context_array
-        return self.__class__(knl=-ctx2np(self.knl), _context=_context,
+        return self.__class__(knl=-ctx2np(self.length), _context=_context,
                               _buffer=_buffer, _offset=_offset)
 
 

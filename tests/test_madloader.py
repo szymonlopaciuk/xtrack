@@ -578,7 +578,7 @@ def test_slicing_convert_sbend():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(1)),
     ]
@@ -629,7 +629,7 @@ def test_slicing_convert_quadrupole_to_simple_thin_quad():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(1)),
     ]
@@ -671,7 +671,7 @@ def test_slicing_convert_quadrupole_to_multiple():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(2)),
     ]
@@ -718,7 +718,7 @@ def test_slicing_convert_sextupole():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(2)),
     ]
@@ -765,7 +765,7 @@ def test_slicing_convert_octupole():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(2)),
     ]
@@ -822,7 +822,7 @@ def test_slicing_convert_kicker(kicker_type, madx_params,
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         SlicingStrategy(UniformSlicing(2)),
     ]
@@ -880,7 +880,7 @@ def test_slicing_get_slicing_strategy():
     beam; use, sequence=ss;
     """)
 
-    ml = MadLoader(mad.sequence.ss, enable_slicing=True)
+    ml = MadLoader(mad.sequence.ss)
     ml.slicing_strategies = [
         # Bends (by type) are only one slice
         SlicingStrategy(UniformSlicing(1), madx_type='sbend'),

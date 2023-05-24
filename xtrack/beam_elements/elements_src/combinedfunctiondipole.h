@@ -15,9 +15,9 @@
 void ThickCombinedFunctionDipole_track_local_particle(ThickCombinedFunctionDipoleData el, LocalParticle* part0) {
     // Adapted from MAD-X `ttcfd' in `trrun.f90'
     const double length = ThickCombinedFunctionDipoleData_get_length(el);
-    const double k1_ = ThickCombinedFunctionDipoleData_get_knl(el, 1) / length;
-    const double k0_ = ThickCombinedFunctionDipoleData_get_knl(el, 0) / length;
-    const double h = ThickCombinedFunctionDipoleData_get_hxl(el) / length;
+    const double k1_ = ThickCombinedFunctionDipoleData_get_k1(el);
+    const double k0_ = ThickCombinedFunctionDipoleData_get_k0(el);
+    const double h = ThickCombinedFunctionDipoleData_get_h(el);
 
     //start_per_particle_block (part0->part)
         const double beta0 = LocalParticle_get_beta0(part);

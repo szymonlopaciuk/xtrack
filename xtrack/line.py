@@ -377,6 +377,7 @@ class Line:
         replace_in_expr=None,
         classes=(),
         ignored_madtypes=(),
+        allow_thick=False,
         slicing_strategies=None,
     ):
 
@@ -433,6 +434,7 @@ class Line:
             expressions_for_element_types=expressions_for_element_types,
             error_table=None,  # not implemented yet
             replace_in_expr=replace_in_expr,
+            allow_thick=allow_thick,
             slicing_strategies=slicing_strategies,
         )
         line=loader.make_line()
