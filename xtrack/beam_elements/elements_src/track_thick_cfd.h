@@ -7,7 +7,7 @@
 #define XTRACK_TRACK_THICK_CFD_H
 
 #define POW2(X) ((X)*(X))
-#define NONZERO(X) ((X) < 0.0 || (X) > 0.0)
+#define NONZERO(X) ((X) != 0.0)
 
 /*gpufun*/
 void track_thick_cfd(
@@ -25,7 +25,8 @@ void track_thick_cfd(
     const double pt = LocalParticle_get_ptau(part);
 
     const double beti = 1.0 / (LocalParticle_get_rvv(part) * beta0);
-    //const double delta_plus_1 = sqrt(pt*pt + 2.0*pt*beti + 1.0);
+    // In MAD-X (delta + 1) is computed:
+    // const double delta_plus_1 = sqrt(pt*pt + 2.0*pt*beti + 1.0);
     const double delta_plus_1 = LocalParticle_get_delta(part) + 1;
     const double bet = delta_plus_1 / (beti + pt);
 

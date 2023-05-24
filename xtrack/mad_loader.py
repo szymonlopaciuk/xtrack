@@ -910,13 +910,23 @@ class MadLoader:
         else:
             h = 0.0
 
+        kwargs = dict(
+            k0=mad_el.k0 or h,
+            h=h,
+            length=mad_el.l,
+        )
+
+        if mad_el.k1:
+            kwargs["k1"] = mad_el.k1
+            element_class = self.classes.CombinedFunctionMagnet
+        else:
+            element_class = self.classes.SimpleThickBend
+
         return [
             self.Builder(
                 mad_el.name,
-                self.classes.SimpleThickBend,
-                k0=mad_el.k0 or h,
-                h=h,
-                length=mad_el.l,
+                element_class,
+                **kwargs,
             ),
         ]
 

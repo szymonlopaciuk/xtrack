@@ -11,9 +11,12 @@ import xobjects as xo
 import xpart as xp
 from xobjects.test_helpers import for_all_test_contexts
 from xtrack.beam_elements.elements import _angle_from_trig
+from xtrack.mad_loader import TeapotSlicing, SlicingStrategy
+from xtrack import MadLoader
 
 import ducktrack as dtk
 
+from cpymad.madx import Madx
 from scipy.stats import linregress
 
 from xpart.particles import Particles, ParticlesPurelyLongitudinal
@@ -891,6 +894,123 @@ def test_exciter(test_context):
     expected_px += np.array([0.3, 0.1, 0])
     particles.move(_context=xo.context_default)
     assert np.allclose(particles.px, expected_px)
+
+
+@pytest.mark.parametrize(
+    'k0, k1, length',
+    [
+        # (-0.1, 0, 0.9), will become the exact dipole
+        # (0, 0, 0.9), will become the exact dipole
+        (-0.1, 0.12, 0.9),
+        (0, 0.12, 0.8),
+        (0.15, -0.23, 0.9),
+        (0, 0.13, 1.7),
+    ]
+)
+@for_all_test_contexts
+def test_combined_function_dipole_against_madx(test_context, k0, k1, length):
+    rng = np.random.default_rng(123)
+    num_part = 100
+
+    p0 = xp.Particles(
+        p0c=xp.PROTON_MASS_EV,
+        x=rng.uniform(-1e-3, 1e-3, num_part),
+        px=rng.uniform(-1e-5, 1e-5, num_part),
+        y=rng.uniform(-2e-3, 2e-3, num_part),
+        py=rng.uniform(-3e-5, 3e-5, num_part),
+        zeta=rng.uniform(-1e-2, 1e-2, num_part),
+        delta=rng.uniform(-1e-4, 1e-4, num_part),
+        _context=test_context,
+    )
+    mad = Madx()
+    mad.input(f"""
+    ss: sequence, l={length};
+        b: sbend, at={length / 2}, angle={k0 * length}, k1={k1}, l={length};
+    endsequence;
+    beam;
+    use, sequence=ss;
+    """)
+
+    ml = MadLoader(mad.sequence.ss, allow_thick=True)
+    line_thick = ml.make_line()
+    line_thick.build_tracker(_context=test_context)
+
+    for ii in range(num_part):
+        mad.input(f"""
+        beam, particle=proton, pc={p0.p0c[ii] / 1e9}, sequence=ss, radiate=FALSE;
+
+        track, onepass, onetable;
+        start, x={p0.x[ii]}, px={p0.px[ii]}, y={p0.y[ii]}, py={p0.py[ii]}, \
+            t={p0.zeta[ii]/p0.beta0[ii]}, pt={p0.ptau[ii]};
+        run, turns=1;
+        endtrack;
+        """)
+
+        mad_results = mad.table.mytracksumm[-1]
+
+        p = p0.copy(_context=xo.ContextCpu())
+        line_thick.track(p, _force_no_end_turn_actions=True)
+
+        xt_tau = p.zeta/p.beta0
+        assert np.allclose(p.x[ii], mad_results.x, atol=1e-13, rtol=0)
+        assert np.allclose(p.px[ii], mad_results.px, atol=1e-13, rtol=0)
+        assert np.allclose(p.y[ii], mad_results.y, atol=1e-13, rtol=0)
+        assert np.allclose(p.py[ii], mad_results.py, atol=1e-13, rtol=0)
+        assert np.allclose(xt_tau[ii], mad_results.t, atol=2e-8, rtol=0)  #?
+        assert np.allclose(p.ptau[ii], mad_results.pt, atol=1e-13, rtol=0)
+
+
+@pytest.mark.parametrize(
+    'madx_element, slices',
+    [
+        ('s: sbend, at=0.45, angle=0.13, k0=0.2, h1=0.13, h2=0.13, l=0.9;', 7000),
+        ('q: quadrupole, at=0.45, k1=0.1, l=0.9;', 7000),
+        ('s: sbend, at=0.45, angle=0.13, k0=0.2, k1=0.08, h1=0.1, h2=0.13, l=0.9;', 15000),
+    ]
+)
+@for_all_test_contexts
+def test_combined_function_dipole_against_sliced(test_context, madx_element, slices):
+    mad = Madx()
+    mad.input(f"""
+        ss: sequence, l=0.9; {madx_element} endsequence;
+        beam; use, sequence=ss;
+    """)
+    ml_ = MadLoader(mad.sequence.ss, allow_thick=True)
+    line_thick = ml_.make_line()
+    line_thick.build_tracker(_context=test_context)
+
+    ml = MadLoader(mad.sequence.ss, allow_thick=False)
+    ml.slicing_strategies = [
+        SlicingStrategy(TeapotSlicing(slices)),
+    ]
+    line_thin = ml.make_line()
+    line_thin.build_tracker(_context=test_context)
+
+    rng = np.random.default_rng(123)
+    num_part = 100
+
+    p0 = xp.Particles(
+        p0c=xp.PROTON_MASS_EV,
+        x=rng.uniform(-1e-3, 1e-3, num_part),
+        px=rng.uniform(-1e-5, 1e-5, num_part),
+        y=rng.uniform(-2e-3, 2e-3, num_part),
+        py=rng.uniform(-3e-5, 3e-5, num_part),
+        zeta=rng.uniform(-1e-2, 1e-2, num_part),
+        delta=rng.uniform(-1e-4, 1e-4, num_part),
+        _context=test_context,
+    )
+    p_thick = p0.copy(_context=xo.ContextCpu())
+    p_thin = p0.copy(_context=xo.ContextCpu())
+
+    line_thick.track(p_thick, _force_no_end_turn_actions=True)
+    line_thin.track(p_thin, _force_no_end_turn_actions=True)
+
+    assert np.allclose(p_thick.x, p_thin.x, atol=1e-12, rtol=0)
+    assert np.allclose(p_thick.px, p_thin.px, atol=1e-12, rtol=0)
+    assert np.allclose(p_thick.y, p_thin.y, atol=1e-12, rtol=0)
+    assert np.allclose(p_thick.py, p_thin.py, atol=1e-12, rtol=0)
+    assert np.allclose(p_thick.zeta, p_thin.zeta, atol=4e-8, rtol=0)  #?
+    assert np.allclose(p_thick.ptau, p_thin.ptau, atol=1e-12, rtol=0)
 
 
 test_source = r"""
