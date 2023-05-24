@@ -22,9 +22,13 @@ ml.slicing_strategies = [
     ),
     SlicingStrategy(slicing=TeapotSlicing(2), name=r'(mqt|mqtli|mqtlh)\..*'),
 ]
+
 line = ml.make_line()
 
 line.particle_ref = xp.Particles(mass0=xp.PROTON_MASS_EV, q0=1, energy0=7e12)
 
 line.build_tracker()
 tw = line.twiss(method='4d')
+
+print(f"Qx = {tw['qx']:.5f} Qy = {tw['qy']:.5f} "
+      f"Q'x = {tw['dqx']:.5f} Q'y = {tw['dqy']:.5f}")

@@ -723,6 +723,77 @@ class SimpleThinQuadrupole(BeamElement):
                               _buffer=_buffer, _offset=_offset)
 
 
+class ThickCombinedFunctionDipole(BeamElement):
+    """An specialized version of Multipole to model a thin quadrupole
+    (knl[0], ksl, hxl, hyl are all zero).
+
+    Parameters
+    ----------
+    knl : array
+        Normalized integrated strength of the normal components in units of m^-n.
+        Must be of length 2.
+
+    """
+    isthick = True
+
+    _xofields={
+        'knl': xo.Float64[2],
+        'hxl': xo.Float64,
+        'length': xo.Float64,
+    }
+
+    _extra_c_sources = [
+        _pkg_root.joinpath('beam_elements/elements_src/combinedfunctiondipole.h')]
+
+
+    def __init__(self, knl=None, hxl=0.0, **kwargs):
+        if kwargs.get('length', 0.0) == 0.0:
+            raise ValueError("A thick element must have a length.")
+
+        if knl is None:
+            knl = np.zeros(2)
+
+        if '_xobject' in kwargs.keys() and kwargs['_xobject'] is not None:
+            self.xoinitialize(**kwargs)
+            return
+
+        if len(knl) == 1:
+            knl = np.array([knl[0], 0.0])
+        elif len(knl) != 2:
+            raise ValueError("For a quadrupole, len(knl) must be 2.")
+
+        kwargs["knl"] = knl
+        kwargs["hxl"] = hxl
+        self.xoinitialize(**kwargs)
+
+    @property
+    def hxl(self): return 0.0
+
+    @property
+    def hyl(self): return 0.0
+
+    @property
+    def radiation_flag(self): return 0.0
+
+    @property
+    def order(self): return 1
+
+    @property
+    def inv_factorial_order(self): return 1.0
+
+    @property
+    def ksl(self): return self._buffer.context.linked_array_type.from_array(
+        np.array([0., 0.]),
+        mode='readonly',
+        container=self,
+    )
+
+    def get_backtrack_element(self, _context=None, _buffer=None, _offset=None):
+        ctx2np = self._buffer.context.nparray_from_context_array
+        return self.__class__(knl=-ctx2np(self.knl), _context=_context,
+                              _buffer=_buffer, _offset=_offset)
+
+
 class SimpleThinBend(BeamElement):
     '''A specialized version of Multipole to model a thin bend (ksl, hyl are all zero).
     knl : array

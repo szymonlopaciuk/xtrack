@@ -409,11 +409,13 @@ class Aperture:
 
 
 class Alignment:
-    def __init__(self, mad_el, enable_errors, classes, Builder):
+    def __init__(self, mad_el, enable_errors, classes, Builder, custom_tilt=None):
         self.mad_el = mad_el
         self.tilt = mad_el.get("tilt", 0)  # some elements do not have tilt
         if self.tilt:
             self.tilt = rad2deg(self.tilt)
+        if custom_tilt is not None:
+            self.tilt += rad2deg(custom_tilt)
         self.name = mad_el.name
         self.dx = 0
         self.dy = 0
@@ -785,11 +787,12 @@ class MadLoader:
             length=mad_el.l * weight,
         )
 
-    def convert_thin_element(self, xtrack_el, mad_el):
+    def convert_thin_element(self, xtrack_el, mad_el, custom_tilt=None):
         """add aperture and transformations to a thin element
         tilt, offset, aperture, offset, tilt, tilt, offset, kick, offset, tilt
         """
-        align = Alignment(mad_el, self.enable_errors, self.classes, self.Builder)
+        align = Alignment(
+            mad_el, self.enable_errors, self.classes, self.Builder, custom_tilt)
         # perm=self.permanent_alignement(cpymad_elem) #to be implemented
         elem_list = []
         # elem_list.extend(perm.entry())
@@ -822,6 +825,26 @@ class MadLoader:
                     ksl=[0, mad_el.k1s * mad_el.l * elem_weight],
                 )
             return element
+
+        if mad_el.l:
+            if mad_el.k1s:
+                tilt = -np.atan2(mad_el.k1s, mad_el.k1) / 2
+                knl1 = 0.5 * np.sqrt(mad_el.k1s ** 2 + mad_el.k1 ** 2) * mad_el.l
+            else:
+                tilt = None
+                knl1 = mad_el.k1 * mad_el.l
+            return self.convert_thin_element(
+                [
+                    self.Builder(
+                        mad_el.name,
+                        self.classes.ThickCombinedFunctionDipole,
+                        knl=[0, knl1],
+                        length=mad_el.l,
+                    ),
+                ],
+                mad_el,
+                custom_tilt=tilt,
+            )
 
         slicing_strategy = self.get_slicing_strategy(mad_el)
         sequence = []
@@ -873,8 +896,23 @@ class MadLoader:
 
         return sequence
 
+    def _make_thick_bend(self, mad_el):
+        knl0 = mad_el.k0 * mad_el.l
+        return [
+            self.Builder(
+                mad_el.name,
+                self.classes.ThickCombinedFunctionDipole,
+                knl=[knl0],
+                hxl=mad_el.angle or knl0,
+                length=mad_el.l,
+            ),
+        ]
+
     def convert_rbend(self, mad_el):
-        sequence = self._slice_bend_thin(mad_el)
+        if self.enable_slicing:
+            sequence = self._slice_bend_thin(mad_el)
+        else:
+            sequence = self._make_thick_bend(mad_el)
 
         # Add the dipole edge(s)
         new_h = mad_el.k0 or mad_el.angle / mad_el.l
@@ -908,7 +946,10 @@ class MadLoader:
         return self.convert_thin_element(sequence, mad_el)
 
     def convert_sbend(self, mad_el):
-        sequence = self._slice_bend_thin(mad_el)
+        if self.enable_slicing:
+            sequence = self._slice_bend_thin(mad_el)
+        else:
+            sequence = self._make_thick_bend(mad_el)
 
         new_h = mad_el.k0 or mad_el.angle / mad_el.l
 
@@ -949,9 +990,14 @@ class MadLoader:
                 length=mad_el.l * elem_weight,
             )
 
+        if self.enable_slicing:
+            slicing_strategy = self.get_slicing_strategy(mad_el)
+        else:
+            slicing_strategy = UniformSlicing(1)
+
         sequence = []
         drifts, sexts = 1, 1
-        for weight, is_drift in self.get_slicing_strategy(mad_el):
+        for weight, is_drift in slicing_strategy:
             if is_drift:
                 elem = self._make_drift_slice(mad_el, weight, f"drift_{{}}..{drifts}")
                 drifts += 1
@@ -972,9 +1018,14 @@ class MadLoader:
                 length=mad_el.l * elem_weight,
             )
 
+        if self.enable_slicing:
+            slicing_strategy = self.get_slicing_strategy(mad_el)
+        else:
+            slicing_strategy = UniformSlicing(1)
+
         sequence = []
         drifts, octs = 1, 1
-        for weight, is_drift in self.get_slicing_strategy(mad_el):
+        for weight, is_drift in slicing_strategy:
             if is_drift:
                 elem = self._make_drift_slice(mad_el, weight, f"drift_{{}}..{drifts}")
                 drifts += 1
@@ -1128,9 +1179,14 @@ class MadLoader:
                 [_make_thin_kicker_slice(1, '{}')], mad_el
             )
 
+        if self.enable_slicing:
+            slicing_strategy = self.get_slicing_strategy(mad_el)
+        else:
+            slicing_strategy = UniformSlicing(1)
+
         sequence = []
         drifts, kicks = 1, 1
-        for weight, is_drift in self.get_slicing_strategy(mad_el):
+        for weight, is_drift in slicing_strategy:
             if is_drift:
                 elem = self._make_drift_slice(mad_el, weight, f"drift_{{}}..{drifts}")
                 drifts += 1
@@ -1166,9 +1222,14 @@ class MadLoader:
                 [_make_thin_hkicker_slice(1, '{}')], mad_el
             )
 
+        if self.enable_slicing:
+            slicing_strategy = self.get_slicing_strategy(mad_el)
+        else:
+            slicing_strategy = UniformSlicing(1)
+
         sequence = []
         drifts, hkicks = 1, 1
-        for weight, is_drift in self.get_slicing_strategy(mad_el):
+        for weight, is_drift in slicing_strategy:
             if is_drift:
                 elem = self._make_drift_slice(mad_el, weight, f"drift_{{}}..{drifts}")
                 drifts += 1
@@ -1202,9 +1263,14 @@ class MadLoader:
                 [_make_thin_vkicker_slice(1, '{}')], mad_el
             )
 
+        if self.enable_slicing:
+            slicing_strategy = self.get_slicing_strategy(mad_el)
+        else:
+            slicing_strategy = UniformSlicing(1)
+
         sequence = []
         drifts, vkicks = 1, 1
-        for weight, is_drift in self.get_slicing_strategy(mad_el):
+        for weight, is_drift in slicing_strategy:
             if is_drift:
                 elem = self._make_drift_slice(mad_el, weight, f"drift_{{}}..{drifts}")
                 drifts += 1
