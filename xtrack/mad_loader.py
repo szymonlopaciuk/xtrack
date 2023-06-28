@@ -61,13 +61,6 @@ def rad2deg(rad):
     return rad * 180 / np.pi
 
 
-def evals_to_zero(var_or_val):
-    if hasattr(var_or_val, '_value'):
-        return var_or_val._value == 0
-    else:
-        return not bool(var_or_val)
-
-
 def get_value(x):
     if is_expr(x):
         return x._get_value()
@@ -140,7 +133,7 @@ def is_expr(x):
     return hasattr(x, "_get_value")
 
 
-def not_zero(x):
+def nonzero_or_expr(x):
     if is_expr(x):
         return True
     else:
@@ -423,7 +416,7 @@ class Aperture:
                     dy=-self.dy,
                 )
             )
-        if not_zero(self.aper_tilt):
+        if nonzero_or_expr(self.aper_tilt):
             out.append(
                 self.Builder(
                     self.name + "_aper_tilt_exit",
@@ -733,7 +726,7 @@ class MadLoader:
         return math
 
     def _assert_element_is_thin(self, mad_el):
-        if not evals_to_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if self.allow_thick:
                 raise NotImplementedError(
                     f'Cannot load element {mad_el.name}, as thick elements of '
@@ -841,7 +834,7 @@ class MadLoader:
         enable_entry_fringe=True,
         enable_exit_fringe=True,
     ):
-        if not_zero(mad_el.l) and self.allow_thick:
+        if value_if_expr(mad_el.l) != 0 and self.allow_thick:
             sequence = [self._convert_bend_thick(mad_el)]
         else:
             sequence = [self._convert_bend_thin(mad_el)]
@@ -945,7 +938,7 @@ class MadLoader:
     def _convert_bend_thin(self, mad_el):
         self._assert_element_is_thin(mad_el)
 
-        if not_zero(mad_el.angle):
+        if nonzero_or_expr(mad_el.angle):
             hxl = mad_el.angle
         else:
             hxl = mad_el.k0 * mad_el.l
@@ -1003,7 +996,7 @@ class MadLoader:
             length=mad_el.l,
         )
 
-        if not_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if not self.allow_thick:
                 self._assert_element_is_thin(mad_el)
 
@@ -1026,7 +1019,7 @@ class MadLoader:
             length=mad_el.l,
         )
 
-        if not_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if not self.allow_thick:
                 self._assert_element_is_thin(mad_el)
 
@@ -1177,7 +1170,7 @@ class MadLoader:
             hyl=0,
         )
 
-        if not_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if not self.allow_thick:
                 self._assert_element_is_thin(mad_el)
 
@@ -1210,7 +1203,7 @@ class MadLoader:
             hyl=0,
         )
 
-        if not_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if not self.allow_thick:
                 self._assert_element_is_thin(mad_el)
 
@@ -1241,7 +1234,7 @@ class MadLoader:
             hyl=0,
         )
 
-        if not_zero(mad_el.l):
+        if value_if_expr(mad_el.l) != 0:
             if not self.allow_thick:
                 self._assert_element_is_thin(mad_el)
 
@@ -1288,7 +1281,7 @@ class MadLoader:
             lag=ee.lag * 360,
         )
 
-        if not evals_to_zero(ee.l):
+        if value_if_expr(ee.l) != 0:
             sequence = [
                 self._make_drift_slice(ee, 0.5, f"drift_{{}}..1"),
                 el,
