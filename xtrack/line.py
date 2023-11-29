@@ -4,47 +4,45 @@
 # ######################################### #
 
 import io
-import math
-import logging
 import json
+import logging
+import math
 from contextlib import contextmanager
 from copy import deepcopy
 from pprint import pformat
-from typing import List, Literal, Optional, Collection
+from typing import List, Literal, Optional
 
 import numpy as np
 from scipy.constants import c as clight
 
-from . import linear_normal_form as lnf
-
+import xdeps as xd
 import xobjects as xo
 import xpart as xp
 import xtrack as xt
-import xdeps as xd
-from .compounds import CompoundContainer, CompoundType, Compound, SlicedCompound
-from .progress_indicator import progress
-from .slicing import Slicer
-
-from .survey import survey_from_line
-from xtrack.twiss import (compute_one_turn_matrix_finite_differences,
-                          find_closed_orbit_line, twiss_line,
-                          compute_T_matrix_line,
-                          DEFAULT_MATRIX_STABILITY_TOL,
-                          DEFAULT_MATRIX_RESPONSIVENESS_TOL)
-from .match import match_line, closed_orbit_correction, match_knob_line
-from .tapering import compensate_radiation_energy_loss
-from .mad_loader import MadLoader
-from .beam_elements import element_classes
+from xdeps.refs import is_ref
+from xtrack.twiss import (
+    compute_one_turn_matrix_finite_differences,
+    find_closed_orbit_line, twiss_line,
+    compute_T_matrix_line,
+    DEFAULT_MATRIX_STABILITY_TOL,
+    DEFAULT_MATRIX_RESPONSIVENESS_TOL,
+)
 from . import beam_elements
 from .beam_elements import Drift, BeamElement, Marker, Multipole
+from .beam_elements import element_classes
+from .compounds import CompoundContainer, CompoundType, Compound, SlicedCompound
 from .footprint import Footprint, _footprint_with_linear_rescale
-from .internal_record import (start_internal_logging_for_elements_of_type,
-                              stop_internal_logging_for_elements_of_type)
-
 from .general import _print
-
-# For xdeps compatibility
-isref = (xd.refs.isref if hasattr(xd.refs, 'isref') else xd.refs._isref)
+from .internal_record import (
+    start_internal_logging_for_elements_of_type,
+    stop_internal_logging_for_elements_of_type,
+)
+from .mad_loader import MadLoader
+from .match import match_line, closed_orbit_correction, match_knob_line
+from .progress_indicator import progress
+from .slicing import Slicer
+from .survey import survey_from_line
+from .tapering import compensate_radiation_energy_loss
 
 log = logging.getLogger(__name__)
 
@@ -2073,18 +2071,16 @@ class Line:
 
         Parameters
         ----------
-        model: str
+        model: str | None
             Radiation model to use. Can be 'mean', 'quantum' or None.
-        model_beamstrahlung: str
+        model_beamstrahlung: str | None
             Beamstrahlung model to use. Can be 'mean', 'quantum' or None.
-        model_bhabha: str
+        model_bhabha: str | None
             Bhabha model to use. Can be 'quantum' or None.
         """
 
         if mode != 'deprecated':
             raise NameError('mode is deprecated, use model instead')
-
-        self._check_valid_tracker()
 
         assert model in [None, 'mean', 'quantum']
         assert model_beamstrahlung in [None, 'mean', 'quantum']
@@ -3742,7 +3738,7 @@ class LineVars:
 
     def __setitem__(self, key, value):
         if self.cache_active:
-            if isref(value) or isinstance(value, VarSetter):
+            if is_ref(value) or isinstance(value, VarSetter):
                 raise ValueError('Cannot set a variable to a ref when the '
                                  'cache is active')
             self._setter_from_cache(key)(value)

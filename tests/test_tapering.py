@@ -22,10 +22,9 @@ def test_tapering_and_twiss_with_radiation():
     with open(filename, 'r') as f:
         line = xt.Line.from_dict(json.load(f))
 
-    line.build_tracker()
-
     # Initial twiss (no radiation)
     line.configure_radiation(model=None)
+    line.build_tracker()
     tw_no_rad = line.twiss(method='4d', freeze_longitudinal=True)
 
     assert tw_no_rad.radiation_method == None

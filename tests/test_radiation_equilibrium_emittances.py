@@ -194,9 +194,9 @@ def test_eq_emitt(conf):
     if conf['check_against_tracking']:
 
         line.discard_tracker()
+        line.configure_radiation(model='quantum')
         line.build_tracker(_context=test_context)
 
-        line.configure_radiation(model='quantum')
         p = line.build_particles(num_particles=30)
         line.track(p, num_turns=400, turn_by_turn_monitor=True, time=True)
         mon = line.record_last_track

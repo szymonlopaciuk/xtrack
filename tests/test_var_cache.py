@@ -27,7 +27,7 @@ def test_var_cache(test_context):
     assert 'on_x5' in collider.vars
     assert 'on_x9' not in collider.vars
 
-    assert xd.refs._isref(collider.vars['on_x5'])
+    assert xd.refs.is_ref(collider.vars['on_x5'])
     try:
         collider.vars['on_x9']
     except KeyError:
@@ -97,7 +97,7 @@ def test_var_cache(test_context):
     assert 'on_x5' in line.vars
     assert 'on_x9' not in line.vars
 
-    assert xd.refs._isref(line.vars['on_x5'])
+    assert xd.refs.is_ref(line.vars['on_x5'])
     try:
         line.vars['on_x9']
     except KeyError:
@@ -159,7 +159,7 @@ def test_var_cache(test_context):
 
     line.vars['on_x2'] = 123
 
-    assert xd.refs._isref(line.vars['on_x5'])
+    assert xd.refs.is_ref(line.vars['on_x5'])
     try:
         line.vars['on_x9']
     except KeyError:

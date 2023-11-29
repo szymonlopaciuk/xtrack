@@ -107,9 +107,9 @@ def test_synrad_configuration(test_context):
             elements[5].move(_context=test_context)
 
         line = xt.Line(elements=elements)
+        line.configure_radiation(model='mean')
         line.build_tracker(_context=test_context)
 
-        line.configure_radiation(model='mean')
         for ee in line.elements:
             assert ee.radiation_flag == 1
         p = xp.Particles(x=[0.01, 0.02], _context=test_context)

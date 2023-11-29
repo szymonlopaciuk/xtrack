@@ -251,7 +251,7 @@ class MetaBeamElement(xo.MetaHybridClass):
 
 class BeamElement(xo.HybridClass, metaclass=MetaBeamElement):
 
-    iscollective = None
+    iscollective = False
     isthick = False
     behaves_like_drift = False
     has_backtrack = False

@@ -85,8 +85,8 @@ def test_radiation(test_context):
                 xt.Drift(length=1.0),
                 xt.Multipole(knl=[theta_bend], length=L_bend, hxl=theta_bend)
                 ])
-    line.build_tracker(_context=test_context)
     line.configure_radiation(model='quantum')
+    line.build_tracker(_context=test_context)
 
     sum_photon_energy = 0
     sum_photon_energy_sq = 0
@@ -177,9 +177,8 @@ def test_ring_with_radiation(test_context):
 
     # Build tracker
     line.matrix_stability_tol = 1e-2
-    line.build_tracker()
-
     line.configure_radiation(model='mean')
+    line.build_tracker()
 
     # Twiss
     tw = line.twiss(eneloss_and_damping=True)
@@ -225,9 +224,9 @@ def test_ring_with_radiation(test_context):
                                 _context=test_context
                                 )
     line.discard_tracker()
-    line.build_tracker(test_context)
     line.configure_radiation(model='quantum')
-    num_turns=1500
+    line.build_tracker(test_context)
+    num_turns = 1500
     line.track(par_for_emit, num_turns=num_turns, turn_by_turn_monitor=True)
     mon = line.record_last_track
 
@@ -252,8 +251,8 @@ def test_ring_with_radiation(test_context):
     nemitt_y = 0.5e-6
 
     line.discard_tracker()
-    line.build_tracker(_context=xo.context_default)
     line.configure_radiation(model='mean')
+    line.build_tracker(_context=xo.context_default)
     pgen = xp.generate_matched_gaussian_bunch(line=line,
             num_particles=n_part, total_intensity_particles=bunch_intensity,
             nemitt_x=nemitt_x, nemitt_y=nemitt_y, sigma_z=sigma_z,
