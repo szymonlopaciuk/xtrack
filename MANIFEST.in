@@ -7,3 +7,5 @@ include *.md
 include LICENSE.txt
 
 recursive-include xtrack *.h
+
+recursive-exclude xtrack/prebuilt_kernels *.so *.dll *.dylib *.json
