@@ -4,6 +4,7 @@
 # ######################################### #
 
 from setuptools import setup, find_packages
+from setuptools.dist import Distribution
 from pathlib import Path
 
 #######################################
@@ -11,6 +12,13 @@ from pathlib import Path
 #######################################
 
 extensions = []
+
+
+class BinaryDistribution(Distribution):
+    """Distribution which always forces a binary package with platform name."""
+    def has_ext_modules(_):  # noqa
+        return True
+
 
 #########
 # Setup #
@@ -72,4 +80,5 @@ setup(
             'prebuilt_kernels/*.json',
         ]
     },
+    distclass=BinaryDistribution,
 )
