@@ -24,7 +24,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BEFORE_BUILD: "pip install -e . && python -c 'from xtrack.prebuild_kernels import *; regenerate_kernels()'"
-          CIBW_PROJECT_REQUIRES_PYTHON: ">=3.7"
+          CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"  # pandas
 
       - uses: actions/upload-artifact@v4
         with:
