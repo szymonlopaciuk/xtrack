@@ -20,7 +20,10 @@ jobs:
       - name: Provide gfortran (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install gfortran
+          echo $PATH
+          sudo ln -s $(brew --prefix gfortran)/bin/gfortran /usr/local/bin/gfortran
+          sudo mkdir /usr/local/gfortran
+          sudo ln -s $(brew --prefix gfortran)/current /usr/local/gfortran/lib
           gfortran --version
 
       - name: Install cibuildwheel
