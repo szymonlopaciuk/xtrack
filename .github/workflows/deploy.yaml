@@ -1,4 +1,4 @@
-name: Publish Xdeps to PyPI
+name: Publish Xtrack to PyPI
 
 on:
   release:
@@ -40,6 +40,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BEFORE_BUILD: "pip install --prefer-binary scipy xfields && pip install -e . && python -c 'from xtrack.prebuild_kernels import *; regenerate_kernels()'"
+          CIBW_SKIP: pp*
           CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"  # pandas
 
       - uses: actions/upload-artifact@v4
