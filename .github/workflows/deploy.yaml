@@ -54,7 +54,7 @@ jobs:
     needs: [build-wheels, build-sdist]
     environment:
       name: test-pypi
-      url: https://test.pypi.org/p/xdeps
+      url: https://test.pypi.org/p/xtrack
     permissions:
       id-token: write
 
