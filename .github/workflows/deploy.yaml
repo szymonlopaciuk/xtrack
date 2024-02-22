@@ -17,30 +17,16 @@ jobs:
 
       - uses: actions/setup-python@v3
 
-      # We might need to build scipy sometimes, as wheels for not all macOS
-      # versions are available for some reason. In order to do it, we need
-      # to set up some extra de
-      - name: Provide gfortran (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          sudo ln -s $(brew --prefix gfortran)/bin/gfortran /usr/local/bin/gfortran
-          sudo mkdir /usr/local/gfortran
-          sudo ln -s $(brew --prefix gfortran)/current /usr/local/gfortran/lib
-          gfortran --version
-          brew install openblas
-          
-          echo 'LDFLAGS=-L/opt/homebrew/opt/openblas/lib' >> $GITHUB_ENV
-          echo 'CPPFLAGS=-I/opt/homebrew/opt/openblas/include' >> $GITHUB_ENV
-          echo 'PKG_CONFIG_PATH=/opt/homebrew/opt/openblas/lib/pkgconfig' >> $GITHUB_ENV
-
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==2.16.5
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BEFORE_BUILD: "pip install --prefer-binary scipy xfields && pip install -e . && python -c 'from xtrack.prebuild_kernels import *; regenerate_kernels()'"
-          CIBW_SKIP: pp*
+          CIBW_BEFORE_BUILD: "pip install --prefer-binary scipy xfields && \
+            pip install -e . && \
+            python -c 'from xtrack.prebuild_kernels import *; regenerate_kernels()'"
+          CIBW_SKIP: pp* *_i686
           CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"  # pandas
 
       - uses: actions/upload-artifact@v4
