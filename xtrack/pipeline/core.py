@@ -15,7 +15,7 @@ class PipelineCommunicator:
     def __init__(self):
         self.messages = {}
 
-    def Issend(self,send_buffer,dest,tag):
+    def Issend(self, send_buffer, dest, tag):
         if dest not in self.messages.keys():
             self.messages[dest] = {}
         if tag not in self.messages[dest].keys():
@@ -23,14 +23,14 @@ class PipelineCommunicator:
         self.messages[dest][tag].append(send_buffer)
         return self
 
-    def Recv(self,recieve_buffer,source,tag):
+    def Recv(self, receive_buffer, source, tag):
         assert source in self.messages.keys()
         assert tag in self.messages[source].keys()
         assert bool(self.messages[source][tag])
         message = self.messages[source][tag].pop(0)
-        recieve_buffer[:] = message[:]
+        receive_buffer[:] = message[:]
 
-    def Iprobe(self,source, tag):
+    def Iprobe(self, source, tag):
         if source in self.messages.keys():
             if tag in self.messages[source].keys():
                 return bool(self.messages[source][tag])
