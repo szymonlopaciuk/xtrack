@@ -184,20 +184,21 @@ class Environment:
         else:
             xt.Line.__setitem__(self, key, value)
 
-Environment.element_dict = xt.Line.element_dict
-Environment._init_var_management = xt.Line._init_var_management
-Environment._xdeps_vref = xt.Line._xdeps_vref
-Environment._xdeps_fref = xt.Line._xdeps_fref
-Environment._xdeps_manager = xt.Line._xdeps_manager
-Environment._xdeps_eval = xt.Line._xdeps_eval
-Environment.element_refs = xt.Line.element_refs
-Environment.vars = xt.Line.vars
-Environment.varval = xt.Line.varval
-Environment.vv = xt.Line.vv
-Environment.replace_replica = xt.Line.replace_replica
-Environment.__getitem__ = xt.Line.__getitem__
-Environment.set = xt.Line.set
-Environment.get = xt.Line.get
+    element_dict = xt.Line.element_dict
+    _init_var_management = xt.Line._init_var_management
+    _xdeps_vref = xt.Line._xdeps_vref
+    _xdeps_fref = xt.Line._xdeps_fref
+    _xdeps_manager = xt.Line._xdeps_manager
+    _xdeps_eval = xt.Line._xdeps_eval
+    element_refs = xt.Line.element_refs
+    vars = xt.Line.vars
+    varval = xt.Line.varval
+    vv = xt.Line.vv
+    replace_replica = xt.Line.replace_replica
+    __getitem__ = xt.Line.__getitem__
+    set = xt.Line.set
+    get = xt.Line.get
+
 
 class Place:
 
