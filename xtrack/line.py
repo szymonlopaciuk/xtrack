@@ -37,7 +37,7 @@ from xtrack.twiss import (compute_one_turn_matrix_finite_differences,
                           get_non_linear_chromaticity,
                           DEFAULT_MATRIX_STABILITY_TOL,
                           DEFAULT_MATRIX_RESPONSIVENESS_TOL)
-from xtrack.aperture_meas import measure_aperture
+from xtrack.aperture_meas import measure_aperture_extent, measure_aperture_shape
 from .match import match_line, closed_orbit_correction, match_knob_line, Action
 from .tapering import compensate_radiation_energy_loss
 from .mad_loader import MadLoader
@@ -800,8 +800,10 @@ class Line:
             True: 'reverse', False: 'proper'}[reverse]
         return tab
 
-    def get_aperture_table(self, dx=1e-3, dy=1e-3, x_range=(-0.1, 0.1),
-                           y_range=(-0.1, 0.1)):
+    def get_aperture_table(
+            self, dx=1e-3, dy=1e-3, x_range=(-0.1, 0.1), y_range=(-0.1, 0.1),
+            dr=1e-3, d_angle=np.pi / 20, r_max=0.1,
+            option: Literal['extent', 'poly'] = 'extent'):
         '''
         Return a table with the horizontal and vertical aperture estimated at all
         elements of the line.
@@ -814,27 +816,42 @@ class Line:
         Parameters
         ----------
         dx : float, optional
-            Required horizontal resolution (in m) for the aperture measurement.
-            Default is 1e-3.
+            Required horizontal resolution (in m) for the aperture measurement
+            used when the 'extent' option is selected. Default is 1e-3.
         dy : float, optional
-            Required vertical resolution (in m) for the aperture measurement.
-            Default is 1e-3.
+            Required vertical resolution (in m) for the aperture measurement
+            used when the 'extent' option is selected. Default is 1e-3.
         x_range : tuple, optional
-            Horizontal range (in m) for the aperture measurement.
-            Default is (-0.1, 0.1).
+            Horizontal range (in m) for the aperture measurement used when the
+            'extent' option is selected. Default is (-0.1, 0.1).
         y_range : tuple, optional
-            Vertical range (in m) for the aperture measurement.
-            Default is (-0.1, 0.1).
-
+            Vertical range (in m) for the aperture measurement used when the
+            'extent' option is selected. Default is (-0.1, 0.1).
+        dr : float, optional
+            Required radial resolution (in m) for the aperture measurement when
+            the 'poly' option is selected. Default is 1e-3.
+        d_angle : float, optional
+            Required angular resolution (in rad) for the aperture measurement
+            when the 'poly' option is selected. Default is 1/40 of a full turn.
+        r_max : float, optional
+            Radial range (in m) for the aperture measurement when the 'poly'
+            option is selected. Default is 0.1.
         Returns
         -------
         aperture_table : xtrack.Table
             Table with the horizontal and vertical aperture at all elements
             of the line.
         '''
-
-        return xt.aperture_meas.measure_aperture(self,
-            dx=1e-3, dy=1e-3, x_range=(-0.1, 0.1), y_range=(-0.1, 0.1))
+        if option == 'poly':
+            return measure_aperture_shape(
+                self, dr=dr, d_angle=d_angle, r_max=r_max,
+            )
+        elif option == 'extent':
+            return measure_aperture_extent(
+                self, dx=dx, dy=dy, x_range=x_range, y_range=y_range,
+            )
+        else:
+            raise ValueError(f'Unknown option {option}')
 
     def copy(self, shallow=False, _context=None, _buffer=None):
         '''
