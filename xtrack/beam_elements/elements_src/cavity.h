@@ -16,8 +16,9 @@ void Cavity_track_local_particle(CavityData el, LocalParticle* part0)
     double const lag = CavityData_get_lag(el);
     double const lag_taper = CavityData_get_lag_taper(el);
     int64_t const absolute_time = CavityData_get_absolute_time(el);
+    double const length = CavityData_get_length(el);
 
-    track_cavity_particles(part0, volt, freq, lag, lag_taper, absolute_time);
+    track_cavity_particles(part0, volt, freq, lag, lag_taper, absolute_time, length);
 }
 
 #endif  // XTRACK_CAVITY_H

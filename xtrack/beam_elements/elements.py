@@ -127,6 +127,7 @@ class Cavity(BeamElement):
         'lag': xo.Float64,
         'lag_taper': xo.Float64,
         'absolute_time': xo.Int64,
+        'length': xo.Float64,
     }
 
     _extra_c_sources = [
@@ -134,6 +135,7 @@ class Cavity(BeamElement):
     ]
 
     has_backtrack = True
+    isthick = True
 
 
 class XYShift(BeamElement):

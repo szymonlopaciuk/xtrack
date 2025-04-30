@@ -56,11 +56,23 @@ void track_cavity_particles(
     double freq,
     double lag,
     double lag_taper,
-    int64_t absolute_time
+    int64_t absolute_time,
+    double length
 ) {
-    START_PER_PARTICLE_BLOCK(part0, part);
-        track_cavity_body_single_particle(part, volt, freq, lag, lag_taper, absolute_time);
-    END_PER_PARTICLE_BLOCK;
+    if (length != 0.)
+    {
+        double half_length = length / 2;
+        START_PER_PARTICLE_BLOCK(part0, part);
+            Drift_single_particle(part, half_length);
+            track_cavity_body_single_particle(part, volt, freq, lag, lag_taper, absolute_time);
+            Drift_single_particle(part, half_length);
+        END_PER_PARTICLE_BLOCK;
+    }
+    else {
+        START_PER_PARTICLE_BLOCK(part0, part);
+            track_cavity_body_single_particle(part, volt, freq, lag, lag_taper, absolute_time);
+        END_PER_PARTICLE_BLOCK;
+    }
 }
 
 #endif  // XTRACK_TRACK_CAVITY_H
