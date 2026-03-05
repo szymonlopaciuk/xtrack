@@ -18,8 +18,8 @@ def build_aperture_kernels(context):
     '''
 
     kernels = {
-        "build_profile_polygons": xo.Kernel(
-            c_name="build_profile_polygons",
+        "build_profiles_and_bounds": xo.Kernel(
+            c_name="build_profiles_and_bounds",
             args=[
                 xo.Arg(ApertureModel, name="model"),
                 xo.Arg(ProfilePolygons, name="profile_polygons"),

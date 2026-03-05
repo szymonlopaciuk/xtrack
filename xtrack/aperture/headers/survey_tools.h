@@ -45,12 +45,38 @@ inline Point3D survey_point(SurveyData survey, uint32_t idx) {
 }
 
 
-inline LineSegment3D survey_segment(SurveyData survey, uint32_t idx) {
-    Point3D entry = survey_point(survey, idx);
-    Point3D exit = survey_point(survey, idx + 1);
-    return (LineSegment3D) {
-        .start = entry,
-        .end = exit
+static inline Segment3D survey_segment_line(SurveyData survey, uint32_t idx) {
+    const Point3D entry = survey_point(survey, idx);
+    const Point3D exit = survey_point(survey, idx + 1);
+    return (Segment3D) {
+        .type = SEGMENT3D_LINE,
+        .line = (LineSegment3D) {
+            .start = entry,
+            .end = exit
+        }
+    };
+}
+
+
+static inline Segment3D survey_segment(SurveyData survey, uint32_t idx) {
+    const float_type angle = SurveyData_get_angle(survey, idx);
+    const float_type length = SurveyData_get_length(survey, idx);
+
+    if (fabs(angle) < APER_PRECISION || fabs(length) < APER_PRECISION)
+        return survey_segment_line(survey, idx);
+
+    const Pose entry = pose_matrix_from_survey(survey, idx);
+    const float_type curvature = angle / length;
+    const float_type roll = SurveyData_get_tilt(survey, idx);
+
+    return (Segment3D) {
+        .type = SEGMENT3D_ARC,
+        .arc = (ArcSegment3D) {
+            .start_in_world = entry,
+            .length = length,
+            .curvature = curvature,
+            .roll = roll
+        }
     };
 }
 
@@ -81,28 +107,9 @@ SurveyEntry_s interpolate_survey_table_entry(
         entry.angle = t * SurveyData_get_angle(survey, i_survey);
         entry.length = t * SurveyData_get_length(survey, i_survey);
         entry.s = s_current + entry.length;
-
-        float_type pose_current[4][4];
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                pose_current[i][j] = SurveyData_get_pose(survey, i_survey, i, j);
-            }
-        }
-
-        float_type ct = cos(entry.tilt), st = sin(entry.tilt);
-        float_type ca  = cos(entry.angle), sa = sin(entry.angle);
-
-        float_type dx = -entry.length * sinc(entry.angle * 0.5f) * sin(entry.angle * 0.5f);
-        float_type ds = entry.length * sinc(entry.angle);
-
-        float_type tilted_arc[4][4] = {
-            {ct * ca,  -st, -ct * sa,  ct * dx },
-            {st * ca,   ct, -st * sa,  st * dx },
-            {     sa,  0.f,       ca,       ds },
-            {    0.f,  0.f,      0.f,      1.f }
-        };
-
-        matrix_multiply_4x4(pose_current, tilted_arc, entry.pose);
+        Pose pose_current = pose_matrix_from_survey(survey, i_survey);
+        Pose tilted_arc = arc_matrix(entry.length, entry.angle, entry.tilt);
+        matrix_multiply_4x4(pose_current.mat, tilted_arc.mat, entry.pose);
     }
 
     return entry;

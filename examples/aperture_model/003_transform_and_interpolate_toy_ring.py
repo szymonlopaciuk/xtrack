@@ -3,7 +3,6 @@ import xobjects as xo
 import numpy as np
 import matplotlib.pyplot as plt
 from xtrack.aperture.aperture import Aperture, transform_matrix
-from xtrack.aperture.structures import ApertureModel, ApertureType, Circle, Profile, ProfilePosition, Rectangle, TypePosition
 
 
 TOY_RING_SEQUENCE = """

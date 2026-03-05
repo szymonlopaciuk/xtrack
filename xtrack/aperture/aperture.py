@@ -104,7 +104,7 @@ class Aperture:
 
         self._aperture_bounds: Optional[ApertureBounds] = None
         self._profile_polygons: Optional[ProfilePolygons] = None
-        self._build_aperture_bounds()
+        self._build_profiles_and_bounds()
 
         if halo_params is not None:
             self.halo_params.update(halo_params)
@@ -640,7 +640,7 @@ class Aperture:
 
         return s_positions
 
-    def _build_aperture_bounds(self):
+    def _build_profiles_and_bounds(self):
         # Pre-allocate the cross-sections with the correct sizes
         num_points = self.num_profile_points
         num_cross_sections = sum(len(self.model.type_for_position(type_pos).positions) for type_pos in self.model.type_positions)
@@ -671,7 +671,7 @@ class Aperture:
                 self._aperture_bounds.profile_position_indices[idx] = profile_pos_idx
 
         self.call_kernel(
-            'build_profile_polygons',
+            'build_profiles_and_bounds',
             model=self.model,
             profile_polygons=self._profile_polygons,
             aperture_bounds=self._aperture_bounds,

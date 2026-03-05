@@ -9,7 +9,30 @@ typedef struct {
 } LineSegment3D;
 
 
-float_type segment_get_squared_length(LineSegment3D segment) {
+typedef struct {
+    Pose start_in_world;
+    float_type length;
+    float_type curvature;
+    float_type roll;
+} ArcSegment3D;
+
+
+typedef enum {
+    SEGMENT3D_LINE,
+    SEGMENT3D_ARC,
+} Segment3DType;
+
+
+typedef struct {
+    Segment3DType type;
+    union {
+        LineSegment3D line;
+        ArcSegment3D arc;
+    };
+} Segment3D;
+
+
+inline float_type segment_get_squared_length(LineSegment3D segment) {
     const float_type dx = segment.end.x - segment.start.x;
     const float_type dy = segment.end.y - segment.start.y;
     const float_type dz = segment.end.z - segment.start.z;
@@ -17,12 +40,53 @@ float_type segment_get_squared_length(LineSegment3D segment) {
 }
 
 
-float_type segment_get_length(LineSegment3D segment) {
+inline float_type segment_get_length(LineSegment3D segment) {
     return sqrt(segment_get_squared_length(segment));
 }
 
 
-float_type dist_along_segment_where_plane_intersects(LineSegment3D segment, Pose plane)
+inline Point3D line_segment_point_at_distance(const LineSegment3D segment, const float_type distance)
+{
+    const float_type length = segment_get_length(segment);
+
+    if (length <= APER_PRECISION)
+        return segment.start;
+
+    const float_type t = clamp_value(distance / length, 0.f, 1.f);
+    const Point3D direction = point3d_sub(segment.end, segment.start);
+    return point3d_add_scaled(segment.start, direction, t);
+}
+
+
+inline Point3D arc_segment_point_at_distance(const ArcSegment3D segment, const float_type distance)
+{
+    const float_type length = distance;
+    const float_type curvature = segment.curvature;
+    const float_type roll = segment.roll;
+
+    float_type dx, ds;
+    if (fabs(curvature) < APER_PRECISION) {
+        dx = 0.f;
+        ds = length;
+    } else {
+        const float_type angle = curvature * length;
+        dx = (cos(angle) - 1) / curvature;
+        ds = sin(angle) / curvature;
+    }
+
+    const float_type c_roll = cos(roll);
+    const float_type s_roll = sin(roll);
+    const Point3D local = (Point3D){
+        .x = c_roll * dx,
+        .y = s_roll * dx,
+        .z = ds,
+    };
+
+    return pose_apply_point(segment.start_in_world, local);
+}
+
+
+float_type line_segment_plane_intersect(LineSegment3D segment, Pose plane)
 /*
     Return a parameter `t` such that `segment.start + t * (segment.end - segment.start)` is the
     point on the segment at which `plane` intersects the `segment`. The plane is defined as a
@@ -97,11 +161,137 @@ float_type dist_along_segment_where_plane_intersects(LineSegment3D segment, Pose
 }
 
 
-inline float_type closest_t_on_segment(const Point3D p, const Point3D a, const Point3D b)
+float_type arc_segment_plane_intersect(const ArcSegment3D segment, const Pose plane)
 /*
-    Closest point parameter t on segment [a,b] to point p.
+    Return a parameter `t` such that the point at `t * segment.angle` is the point on the
+    segment at which `plane` intersects the `segment`. The plane is defined as a
+    pose, such that if the pose is an identity, the plane lies in the X-Y plane (z=0), or, in
+    other words, `plane @ [0, 0, 1]^T` is the plane normal.
 */
 {
+    const float_type eps = APER_PRECISION;
+    const float_type length = segment.length;
+
+    if (length <= eps) return 0.f;
+
+    // Extract translation T from pose (local -> world)
+    const float_type t_x = plane.mat[0][3];
+    const float_type t_y = plane.mat[1][3];
+    const float_type t_z = plane.mat[2][3];
+
+    // Extract 3rd column of rotation R (plane normal in world)
+    const float_type n_x = plane.mat[0][2];
+    const float_type n_y = plane.mat[1][2];
+    const float_type n_z = plane.mat[2][2];
+
+    // Let A := segment start, compute A - T
+    const Point3D p_start = arc_segment_point_at_distance(segment, 0.f);
+    const float_type ta_x = p_start.x - t_x;
+    const float_type ta_y = p_start.y - t_y;
+    const float_type ta_z = p_start.z - t_z;
+
+    // Let B := segment end, compute B - T
+    const Point3D p_end = arc_segment_point_at_distance(segment, length);
+    const float_type tb_x = p_end.x - t_x;
+    const float_type tb_y = p_end.y - t_y;
+    const float_type tb_z = p_end.z - t_z;
+
+    /*
+        For numerical stability we will use bisection to find the intersection point.
+        In principle there might be two such points, but is this is not expected in
+        practice, we go on assuming there is just one.
+
+        We iteratively converge on an interval where n * (A - T) and n * (B - T),
+        the signed distances between points A, B and the plane, have different signs.
+    */
+    float_type n_dot_ta = n_x * ta_x + n_y * ta_y + n_z * ta_z;
+    float_type n_dot_tb = n_x * tb_x + n_y * tb_y + n_z * tb_z;
+
+    /* Short-circuit if already on one of the points */
+    if (fabs(n_dot_ta) <= eps) return 0.f;
+    if (fabs(n_dot_tb) <= eps) return length;
+
+    /* If no sign change assume no intersection (we assume max one intersection point) */
+    if (signbit(n_dot_ta) == signbit(n_dot_tb)) return NAN;
+
+    /* Bisect */
+    float_type d_lo = 0.f;
+    float_type d_hi = length;
+    float_type d_mid = 0.5f * length;
+
+    for (int i = 0; i < 34; i++) {
+        d_mid = 0.5f * (d_lo + d_hi);
+        const Point3D p_mid = arc_segment_point_at_distance(segment, d_mid);
+        const float_type n_dot_t_mid = n_x * (p_mid.x - t_x) + n_y * (p_mid.y - t_y) + n_z * (p_mid.z - t_z);
+
+        /* Solution found within precision */
+        if (fabs(n_dot_t_mid) <= eps || (d_hi - d_lo) <= eps) {
+            return d_mid;
+        }
+
+        if (signbit(n_dot_t_mid) == signbit(n_dot_ta)) {
+            /* If projections have the same sign, bisect on [d_mid, d_hi] */
+            d_lo = d_mid;
+            n_dot_ta = n_dot_t_mid;
+        } else {
+            /* Otherwise bisect on the interval [d_lo, d_mid] */
+            d_hi = d_mid;
+        }
+    }
+
+    return d_mid / length;
+}
+
+
+inline float_type segment3d_get_length(const Segment3D segment)
+{
+    switch (segment.type) {
+        case SEGMENT3D_LINE:
+            return segment_get_length(segment.line);
+        case SEGMENT3D_ARC:
+            return segment.arc.length;
+    }
+    return NAN;
+}
+
+
+inline Point3D segment3d_point_at_distance(const Segment3D segment, const float_type distance)
+{
+    switch (segment.type) {
+        case SEGMENT3D_LINE:
+            return line_segment_point_at_distance(segment.line, distance);
+        case SEGMENT3D_ARC:
+            return arc_segment_point_at_distance(segment.arc, distance);
+    }
+    return (Point3D){NAN, NAN, NAN};
+}
+
+
+inline float_type dist_along_segment3d_where_plane_intersects(const Segment3D segment, const Pose plane)
+{
+    const float_type length = segment_get_length(segment.line);
+
+    switch (segment.type) {
+        case SEGMENT3D_LINE:
+            return length * line_segment_plane_intersect(segment.line, plane);
+        case SEGMENT3D_ARC:
+            return length * arc_segment_plane_intersect(segment.arc, plane);
+    }
+
+    return NAN;
+}
+
+
+inline float_type closest_t_on_segment(const Point3D p, Segment3D seg)
+/*
+    Closest point parameter t on segment [a,b] to point p.
+
+    // TODO: Implement finding the closest point on arc segments.
+*/
+{
+    const Point3D a = segment3d_point_at_distance(seg, 0);
+    const Point3D b = segment3d_point_at_distance(seg, segment3d_get_length(seg));
+
     const float_type eps = APER_PRECISION;
     const Point3D ab = point3d_sub(b, a);
     const Point3D ap = point3d_sub(p, a);
@@ -111,6 +301,37 @@ inline float_type closest_t_on_segment(const Point3D p, const Point3D a, const P
 
     const float_type t = point3d_dot(ap, ab) / segment_length;
     return t;
+}
+
+
+inline Pose arc_matrix(const float_type length, const float_type angle, const float_type tilt)
+/*
+    Get a transformation to the point at `length` along an arc of `angle`.
+*/
+{
+    if (fabs(angle) < APER_PRECISION) {
+        return transform_to_matrix((Transform){
+            .x = 0,
+            .y = 0,
+            .s = length,
+            .rot_x = 0,
+            .rot_y = 0,
+            .rot_s = 0
+        });
+    }
+
+    const float_type ct = cos(tilt), st = sin(tilt);
+    const float_type ca = cos(angle), sa = sin(angle);
+    const float_type dx = length * (ca - 1) / angle;
+    const float_type ds = length * sa / angle;
+    return (Pose) {
+        .mat = {
+            {ct * ca,  -st, -ct * sa,  ct * dx },
+            {st * ca,   ct, -st * sa,  st * dx },
+            {     sa,  0.f,       ca,       ds },
+            {    0.f,  0.f,      0.f,      1.f }
+        }
+    };
 }
 
 #endif  /* XT_APERTURE_PATH_3D_H */

@@ -35,7 +35,7 @@ profiles = [
 ]
 
 types = [
-    ApertureType(curvature=0., positions=[
+    ApertureType(curvature=0, positions=[
         ProfilePosition(profile_index=1, s_position=0, rot_s=np.deg2rad(15)),
         ProfilePosition(profile_index=1, s_position=5.5, rot_s=np.deg2rad(90)),
         ProfilePosition(profile_index=0, s_position=11, rot_x=np.deg2rad(10)),
