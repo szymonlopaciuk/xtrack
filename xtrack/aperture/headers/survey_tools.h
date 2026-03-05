@@ -10,7 +10,7 @@ typedef struct {
     float_type angle;   // angle of the pose vector
     float_type length;  // length of the segment
     float_type tilt;    // tilt of the segment
-    float_type pose[4][4]; // pose matrix (4x4) for each entry
+    Pose pose;          // pose matrix for each entry
 } SurveyEntry_s;
 
 
@@ -99,7 +99,7 @@ SurveyEntry_s interpolate_survey_table_entry(
         entry.s = SurveyData_get_s(survey, i_survey);
         entry.angle = SurveyData_get_angle(survey, i_survey);
         entry.length = SurveyData_get_length(survey, i_survey);
-        memcpy(entry.pose, pose_matrix_from_survey(survey, i_survey).mat, sizeof(float_type[4][4]));
+        entry.pose = pose_matrix_from_survey(survey, i_survey);
     }
     else {
         // Properly interpolate between the current and the next survey entry
@@ -109,7 +109,7 @@ SurveyEntry_s interpolate_survey_table_entry(
         entry.s = s_current + entry.length;
         Pose pose_current = pose_matrix_from_survey(survey, i_survey);
         Pose tilted_arc = arc_matrix(entry.length, entry.angle, entry.tilt);
-        matrix_multiply_4x4(pose_current.mat, tilted_arc.mat, entry.pose);
+        entry.pose = matrix_multiply(pose_current, tilted_arc);
     }
 
     return entry;
@@ -157,7 +157,7 @@ void resample_survey_table(
             SurveyData_set_tilt(sliced, i_sliced, entry.tilt);
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
-                    SurveyData_set_pose(sliced, i_sliced, i, j, entry.pose[i][j]);
+                    SurveyData_set_pose(sliced, i_sliced, i, j, entry.pose.mat[i][j]);
                 }
             }
             i_sliced++;
