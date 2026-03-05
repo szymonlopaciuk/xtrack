@@ -45,6 +45,8 @@ static inline uint32_t find_aperture_info_bisection(const ApertureBounds, const 
 static inline uint32_t find_aperture_info_linear(const ApertureBounds, const float_type s, const uint32_t lower_bound);
 static inline uint32_t find_aperture_bound_for_s(const ApertureBounds, const float_type s, const uint32_t lower_bound);
 
+static inline Pose type_origin_pose_in_world(const TypePosition type_pos, const SurveyData survey);
+
 
 void build_profiles_and_bounds(
     const ApertureModel model,
@@ -138,19 +140,9 @@ static inline void aperture_profile_pose_in_world(
     Pose profile_in_axis = transform_to_matrix(profile_transform);
     Pose profile_in_type = matrix_multiply(axis_in_type, profile_in_axis);
 
-    // Transformation from type frame -> survey reference point frame
-    Pose type_in_survey_ref;
-    for (uint8_t i = 0; i < 4; i++)
-        for (uint8_t j = 0; j < 4; j++)
-            type_in_survey_ref.mat[i][j] = TypePosition_get_transformation(type_pos, i, j);
-
-    // Transformation from survey reference point -> world frame
-    const uint32_t survey_idx = TypePosition_get_survey_index(type_pos);
-    Pose survey_ref_in_world = pose_matrix_from_survey(survey, survey_idx);
-
-    // Compute survey_ref_in_world @ type_in_survey_ref @ profile_in_type
-    Pose profile_in_survey = matrix_multiply(type_in_survey_ref, profile_in_type);
-    *out_profile_in_world = matrix_multiply(survey_ref_in_world, profile_in_survey);
+    // Compute type_origin_in_world @ profile_in_type
+    const Pose type_origin_in_world = type_origin_pose_in_world(type_pos, survey);
+    *out_profile_in_world = matrix_multiply(type_origin_in_world, profile_in_type);
 }
 
 
@@ -160,8 +152,9 @@ static inline void get_aperture_polygon_and_pose(
     const ApertureBounds aperture_bounds,
     const SurveyData survey,
     const uint32_t aper_info_idx,
+    const Pose target_frame_in_world,
     const Point2D** out_poly,
-    Pose* out_profile_in_world
+    Pose* out_profile_in_type
 )
 {
     const uint32_t type_pos_idx = ApertureBounds_get_type_position_indices(aperture_bounds, aper_info_idx);
@@ -176,14 +169,18 @@ static inline void get_aperture_polygon_and_pose(
 
     *out_poly = (const Point2D* const)ProfilePolygons_getp3_points(profile_polygons, profile_idx, 0, 0);
     const float_type curvature = ApertureType_get_curvature(aper_type);
-    aperture_profile_pose_in_world(type_pos, profile_pos, curvature, survey, out_profile_in_world);
+    Pose profile_in_world;
+    aperture_profile_pose_in_world(type_pos, profile_pos, curvature, survey, &profile_in_world);
+
+    const Pose world_in_current_type = pose_inverse_rigid(target_frame_in_world);
+    *out_profile_in_type = matrix_multiply(world_in_current_type, profile_in_world);
 }
 
 
 static inline void project_3d_polygon_to_plane(
     const Point2D* poly_local,
-    const Pose profile_in_world,
-    const Pose world_in_plane,
+    const Pose profile_in_type,
+    const Pose type_in_plane,
     const uint32_t num_points,
     Point2D* out_poly_plane
 )
@@ -191,8 +188,8 @@ static inline void project_3d_polygon_to_plane(
 {
     for (uint32_t j = 0; j < num_points; j++) {
         const Point3D p_local = (Point3D){ poly_local[j].x, poly_local[j].y, 0.f };
-        const Point3D p_world = pose_apply_point(profile_in_world, p_local);
-        const Point3D p_plane = pose_apply_point(world_in_plane, p_world);
+        const Point3D p_type = pose_apply_point(profile_in_type, p_local);
+        const Point3D p_plane = pose_apply_point(type_in_plane, p_type);
         out_poly_plane[j].x = p_plane.x;
         out_poly_plane[j].y = p_plane.y;
     }
@@ -228,31 +225,31 @@ static inline uint32_t find_best_cyclic_shift_plane(
 
 
 static inline int intersect_segment_with_plane_and_project_xy(
-    const Segment3D segment,
-    const Pose plane_in_world,
-    const Pose world_in_plane,
+    Segment3D segment,
+    const Pose plane_in_type,
+    const Pose type_in_plane,
     Point2D* out_xy_plane
 )
 /*
-    Intersect 3D segment with plane (z = 0 in `plane_in_world`) and project
+    Intersect 3D segment with plane (z = 0 in `plane_in_type`) and project
     the hit point into plane coordinates (x,y). Returns 1 on success, 0 otherwise.
 */
 {
     const float_type eps = APER_PRECISION;
-    const float_type at = dist_along_segment3d_where_plane_intersects(segment, plane_in_world);
+    const float_type at = dist_along_segment3d_where_plane_intersects(segment, plane_in_type);
 
     if (!isfinite(at)) {
-        const Point3D start_world = segment3d_point_at_distance(segment, 0.f);
-        const Point3D end_world = segment3d_point_at_distance(segment, segment3d_get_length(segment));
+        const Point3D start_type = segment3d_point_at_distance(segment, 0.f);
+        const Point3D end_type = segment3d_point_at_distance(segment, segment3d_get_length(segment));
 
-        const Point3D start_plane = pose_apply_point(world_in_plane, start_world);
+        const Point3D start_plane = pose_apply_point(type_in_plane, start_type);
         if (fabs(start_plane.z) <= eps) {
             out_xy_plane->x = start_plane.x;
             out_xy_plane->y = start_plane.y;
             return 1;
         }
 
-        const Point3D end_plane = pose_apply_point(world_in_plane, end_world);
+        const Point3D end_plane = pose_apply_point(type_in_plane, end_type);
         if (fabs(end_plane.z) <= eps) {
             out_xy_plane->x = end_plane.x;
             out_xy_plane->y = end_plane.y;
@@ -263,8 +260,8 @@ static inline int intersect_segment_with_plane_and_project_xy(
 
     const float_type length = segment3d_get_length(segment);
     if (at < -eps || at > length + eps) return 0;
-    const Point3D hit_world = segment3d_point_at_distance(segment, at);
-    const Point3D hit_plane = pose_apply_point(world_in_plane, hit_world);
+    const Point3D hit_type = segment3d_point_at_distance(segment, at);
+    const Point3D hit_plane = pose_apply_point(type_in_plane, hit_type);
 
     out_xy_plane->x = hit_plane.x;
     out_xy_plane->y = hit_plane.y;
@@ -292,12 +289,18 @@ void cross_sections_at_s(
         const float_type s = SurveyData_get_s(survey_at_s, i);
         Point2D* poly_at_s = (Point2D*)cross_sections + i * num_points;
 
-        /* Plane at this s (from the sliced/resampled survey table) */
-        const Pose plane_in_world = pose_matrix_from_survey(survey_at_s, i);
-        const Pose world_in_plane = pose_inverse_rigid(plane_in_world);
-
         /* Use aperture bounds information to find the relevant profile for this s */
-        current_bound_idx = find_aperture_bound_for_s(aperture_bounds, s, current_bound_idx);
+        current_bound_idx = find_aperture_info_for_s(aperture_bounds, s, current_bound_idx);
+        while (current_bound_idx > 0
+            && s < ApertureBounds_get_s_start(aperture_bounds, current_bound_idx)
+        ) {
+            current_bound_idx--;
+        }
+        while (current_bound_idx + 1 < num_bounds
+            && s > ApertureBounds_get_s_end(aperture_bounds, current_bound_idx)
+        ) {
+            current_bound_idx++;
+        }
 
         if (current_bound_idx >= num_bounds) {
             /* If requested s is outside of the model, give up and return NANs */
@@ -318,17 +321,27 @@ void cross_sections_at_s(
         const uint32_t idx_left = has_left ? (current_bound_idx - 1) : current_bound_idx;
         const uint32_t idx_right = has_right ? (current_bound_idx + 1) : current_bound_idx;
 
+        const uint32_t center_type_pos_idx = ApertureBounds_get_type_position_indices(aperture_bounds, current_bound_idx);
+        const TypePosition center_type_pos = ApertureModel_getp1_type_positions(model, center_type_pos_idx);
+        const Pose current_type_origin_in_world = type_origin_pose_in_world(center_type_pos, survey);
+        const Pose world_in_type = pose_inverse_rigid(current_type_origin_in_world);
+
+        /* Plane at this s represented in current type frame */
+        const Pose plane_in_world = pose_matrix_from_survey(survey_at_s, i);
+        const Pose plane_in_type = matrix_multiply(world_in_type, plane_in_world);
+        const Pose type_in_plane = pose_inverse_rigid(plane_in_type);
+
         const Point2D* poly_center = NULL;
         const Point2D* poly_left = NULL;
         const Point2D* poly_right = NULL;
         Pose pose_center, pose_left, pose_right;
 
-        get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, current_bound_idx, &poly_center, &pose_center);
+        get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, current_bound_idx, current_type_origin_in_world, &poly_center, &pose_center);
         if (has_left) {
-            get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, idx_left, &poly_left, &pose_left);
+            get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, idx_left, current_type_origin_in_world, &poly_left, &pose_left);
         }
         if (has_right) {
-            get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, idx_right, &poly_right, &pose_right);
+            get_aperture_polygon_and_pose(model, profile_polygons, aperture_bounds, survey, idx_right, current_type_origin_in_world, &poly_right, &pose_right);
         }
 
         /*
@@ -349,9 +362,9 @@ void cross_sections_at_s(
         Point2D poly_center_plane[num_points];
         Point2D poly_left_plane[num_points];
         Point2D poly_right_plane[num_points];
-        project_3d_polygon_to_plane(poly_center, pose_center, world_in_plane, num_points, poly_center_plane);
-        if (has_left) project_3d_polygon_to_plane(poly_left, pose_left, world_in_plane, num_points, poly_left_plane);
-        if (has_right) project_3d_polygon_to_plane(poly_right, pose_right, world_in_plane, num_points, poly_right_plane);
+        project_3d_polygon_to_plane(poly_center, pose_center, type_in_plane, num_points, poly_center_plane);
+        if (has_left) project_3d_polygon_to_plane(poly_left, pose_left, type_in_plane, num_points, poly_left_plane);
+        if (has_right) project_3d_polygon_to_plane(poly_right, pose_right, type_in_plane, num_points, poly_right_plane);
 
         if (fabs(s - s_center) < eps) {
             for (uint32_t j = 0; j < num_points; j++) poly_at_s[j] = poly_center_plane[j];
@@ -372,30 +385,45 @@ void cross_sections_at_s(
                 const int use_right = (attempt == 0) ? prefer_right : !prefer_right;
                 if (use_right && has_right) {
                     const uint32_t idx_right_shifted = (j + shift_center_right) % num_points;
-                    const Point3D point_a_world = pose_apply_point(pose_center, (Point3D){ poly_center[j].x, poly_center[j].y, 0.f });
-                    const Point3D point_b_world = pose_apply_point(pose_right, (Point3D){ poly_right[idx_right_shifted].x, poly_right[idx_right_shifted].y, 0.f });
+                    const Point3D point_a_type = pose_apply_point(pose_center, (Point3D){ poly_center[j].x, poly_center[j].y, 0.f });
+                    const Point3D point_b_type = pose_apply_point(pose_right, (Point3D){ poly_right[idx_right_shifted].x, poly_right[idx_right_shifted].y, 0.f });
                     const Segment3D segment = {
                         .type = SEGMENT3D_LINE,
-                        .line = (LineSegment3D) { point_a_world, point_b_world }
+                        .line = (LineSegment3D) { point_a_type, point_b_type }
                     };
                     has_intersection = intersect_segment_with_plane_and_project_xy(
-                        segment, plane_in_world, world_in_plane, &hit_point_plane);
+                        segment, plane_in_type, type_in_plane, &hit_point_plane);
                 } else if (!use_right && has_left) {
                     const uint32_t idx_left_shifted = (j + shift_center_left) % num_points;
-                    const Point3D point_a_world = pose_apply_point(pose_left, (Point3D){ poly_left[idx_left_shifted].x, poly_left[idx_left_shifted].y, 0.f });
-                    const Point3D point_b_world = pose_apply_point(pose_center, (Point3D){ poly_center[j].x, poly_center[j].y, 0.f });
+                    const Point3D point_a_type = pose_apply_point(pose_left, (Point3D){ poly_left[idx_left_shifted].x, poly_left[idx_left_shifted].y, 0.f });
+                    const Point3D point_b_type = pose_apply_point(pose_center, (Point3D){ poly_center[j].x, poly_center[j].y, 0.f });
                     const Segment3D segment = {
                         .type = SEGMENT3D_LINE,
-                        .line = (LineSegment3D) { point_a_world, point_b_world }
+                        .line = (LineSegment3D) { point_a_type, point_b_type }
                     };
                     has_intersection = intersect_segment_with_plane_and_project_xy(
-                        segment, plane_in_world, world_in_plane, &hit_point_plane);
+                        segment, plane_in_type, type_in_plane, &hit_point_plane);
                 }
             }
 
             poly_at_s[j] = has_intersection ? hit_point_plane : poly_center_plane[j];
         }
     }
+}
+
+
+static inline Pose type_origin_pose_in_world(const TypePosition type_pos, const SurveyData survey)
+{
+    Pose type_in_survey_ref;
+    for (uint8_t i = 0; i < 4; i++) {
+        for (uint8_t j = 0; j < 4; j++) {
+            type_in_survey_ref.mat[i][j] = TypePosition_get_transformation(type_pos, i, j);
+        }
+    }
+
+    const uint32_t survey_idx = TypePosition_get_survey_index(type_pos);
+    const Pose survey_ref_in_world = pose_matrix_from_survey(survey, survey_idx);
+    return matrix_multiply(survey_ref_in_world, type_in_survey_ref);
 }
 
 
@@ -521,11 +549,12 @@ static inline float_type survey_s_for_aperture(
         const float_type t = dist_along_segment3d_where_plane_intersects(segment, plane_in_world);
         const float_type type_s = SurveyData_get_s(survey, it.index);
 
-        if (-eps <= t && t <= 1 + eps)
+        const float_type seg_len = segment3d_get_length(segment);
+
+        if (-eps <= t && t <= seg_len + eps)
         {
             /* Current survey segment is intersected by the installed profile plane: compute the position. */
-            const float_type dist = t * segment3d_get_length(segment);
-            found_s = type_s + dist;
+            found_s = type_s + t;
             *found_survey_index = it.index;
             break;
         }

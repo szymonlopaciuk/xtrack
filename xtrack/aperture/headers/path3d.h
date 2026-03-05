@@ -208,8 +208,8 @@ float_type arc_segment_plane_intersect(const ArcSegment3D segment, const Pose pl
     float_type n_dot_tb = n_x * tb_x + n_y * tb_y + n_z * tb_z;
 
     /* Short-circuit if already on one of the points */
-    if (fabs(n_dot_ta) <= eps) return 0.f;
-    if (fabs(n_dot_tb) <= eps) return length;
+    if (fabs(n_dot_ta) <= eps) return 0;
+    if (fabs(n_dot_tb) <= eps) return 1;
 
     /* If no sign change assume no intersection (we assume max one intersection point) */
     if (signbit(n_dot_ta) == signbit(n_dot_tb)) return NAN;
@@ -226,7 +226,7 @@ float_type arc_segment_plane_intersect(const ArcSegment3D segment, const Pose pl
 
         /* Solution found within precision */
         if (fabs(n_dot_t_mid) <= eps || (d_hi - d_lo) <= eps) {
-            return d_mid;
+            return d_mid / length;
         }
 
         if (signbit(n_dot_t_mid) == signbit(n_dot_ta)) {
@@ -269,7 +269,7 @@ inline Point3D segment3d_point_at_distance(const Segment3D segment, const float_
 
 inline float_type dist_along_segment3d_where_plane_intersects(const Segment3D segment, const Pose plane)
 {
-    const float_type length = segment_get_length(segment.line);
+    const float_type length = segment3d_get_length(segment);
 
     switch (segment.type) {
         case SEGMENT3D_LINE:

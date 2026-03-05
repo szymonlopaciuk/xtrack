@@ -67,6 +67,7 @@ ax.set_ylabel('X [m]')
 ax.set_zlabel('Y [m]')
 
 ax.auto_scale_xyz([0, 12], [-6, 6], [-6, 6])
+ax.set_box_aspect((1, 1, 1))
 
 aper = Aperture(line, model)
 

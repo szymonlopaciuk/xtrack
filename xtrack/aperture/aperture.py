@@ -678,6 +678,20 @@ class Aperture:
             survey=self.survey_data,
         )
 
+        # Cross-section interpolation assumes bounds are ordered by s.
+        # Numerical noise in recovered installation s can break monotonicity;
+        # enforce a consistent ordering of bound records.
+        order = np.argsort(self._aperture_bounds.s_positions.to_nparray(), kind='stable')
+        if not np.all(order == np.arange(len(order))):
+            self._aperture_bounds = ApertureBounds(
+                count=self._aperture_bounds.count,
+                type_position_indices=self._aperture_bounds.type_position_indices.to_nparray()[order],
+                profile_position_indices=self._aperture_bounds.profile_position_indices.to_nparray()[order],
+                s_positions=self._aperture_bounds.s_positions.to_nparray()[order],
+                s_start=self._aperture_bounds.s_start.to_nparray()[order],
+                s_end=self._aperture_bounds.s_end.to_nparray()[order],
+            )
+
         # Check validity
         # TODO: Re-enable once h is supported in types... as-is breaks the tests
         # eps = 3e-3  # TODO: yikes!
