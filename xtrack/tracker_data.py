@@ -98,21 +98,13 @@ class TrackerData:
         if not check_passed:
             raise RuntimeError('The elements are not in the same buffer')
 
-        line_element_classes = set()
-        for ee in self._elements:
-            if ee._XoStruct in line_element_classes:
-                continue
-            line_element_classes.add(ee._XoStruct)
-            if hasattr(ee, '_drift_slice_class') and ee._drift_slice_class:
-                line_element_classes.add(ee._drift_slice_class._XoStruct)
-            if hasattr(ee, '_thick_slice_class') and ee._thick_slice_class:
-                line_element_classes.add(ee._thick_slice_class._XoStruct)
-            if hasattr(ee, '_thin_slice_class') and ee._thin_slice_class:
-                line_element_classes.add(ee._thin_slice_class._XoStruct)
-            if hasattr(ee, '_entry_slice_class') and ee._entry_slice_class:
-                line_element_classes.add(ee._entry_slice_class._XoStruct)
-            if hasattr(ee, '_exit_slice_class') and ee._exit_slice_class:
-                line_element_classes.add(ee._exit_slice_class._XoStruct)
+        element_classes = [ee._XoStruct for ee in self._elements]
+        line_element_classes = set(
+            xt.get_kernel_element_classes_from_element_classes(
+                element_classes,
+                extra_element_classes=(),
+            )
+        )
 
         self.line_element_classes = line_element_classes
         self.element_s_locations = tuple(element_s_locations)
@@ -123,8 +115,11 @@ class TrackerData:
 
         if not kernel_element_classes:
             kernel_element_classes = (
-                line_element_classes | set(extra_element_classes))
-            kernel_element_classes = sorted(kernel_element_classes, key=lambda cc: cc.__name__)
+                xt.get_kernel_element_classes_from_element_classes(
+                    element_classes,
+                    extra_element_classes=extra_element_classes,
+                )
+            )
         else:
             if not line_element_classes.issubset(set(kernel_element_classes)):
                 raise RuntimeError(
@@ -288,4 +283,3 @@ class TrackerData:
     @property
     def kernel_element_classes(self):
         return self._element_ref_data.elements._itemtype._reftypes
-

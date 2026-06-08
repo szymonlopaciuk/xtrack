@@ -7,6 +7,8 @@ from typing import Literal, Union
 import logging
 from warnings import warn
 from collections import UserDict, defaultdict
+import inspect
+from types import SimpleNamespace
 
 from scipy.constants import c as clight
 
@@ -26,6 +28,106 @@ from .tracker_data import TrackerData
 from .track_flags import TrackFlags
 
 logger = logging.getLogger(__name__)
+
+
+def _xostruct_from_class(cls):
+    if issubclass(cls, xo.Struct):
+        return cls
+    return cls._XoStruct
+
+
+def _get_class_attr(cls, attr_name):
+    attr = inspect.getattr_static(cls, attr_name, None)
+    if isinstance(attr, property):
+        return attr.fget(None)
+    return getattr(cls, attr_name, None)
+
+
+def get_kernel_element_classes_from_element_classes(
+        element_classes,
+        extra_element_classes=(),
+):
+    kernel_element_classes = set()
+    for cls in element_classes:
+        xostruct = _xostruct_from_class(cls)
+        kernel_element_classes.add(xostruct)
+
+        dressing_cls = getattr(xostruct, '_DressingClass', cls)
+        for attr_name in (
+                '_drift_slice_class',
+                '_thick_slice_class',
+                '_thin_slice_class',
+                '_entry_slice_class',
+                '_exit_slice_class',
+        ):
+            slice_cls = _get_class_attr(dressing_cls, attr_name)
+            if slice_cls:
+                kernel_element_classes.add(_xostruct_from_class(slice_cls))
+
+    kernel_element_classes.update(
+        _xostruct_from_class(cls) for cls in extra_element_classes)
+
+    return sorted(
+        kernel_element_classes,
+        key=lambda cc: cc._DressingClass.__name__,
+    )
+
+
+class _ClassBasedTrackerDataForKernelBuild:
+    def __init__(self, buffer, kernel_element_classes):
+        self._buffer = buffer
+        self.kernel_element_classes = kernel_element_classes
+
+
+def build_track_kernel_from_classes(
+        element_classes,
+        config=None,
+        extra_classes=(),
+        extra_element_classes=None,
+        extra_kernels=None,
+        module_name=None,
+        containing_dir='.',
+        compile=True,
+        _context=None,
+        extra_headers=(),
+        track_flags=None,
+):
+    if config is None:
+        config = {}
+    if extra_element_classes is None:
+        extra_element_classes = (
+            xt.ParticlesMonitor._XoStruct,
+            xt.MultiElementMonitor._XoStruct,
+        )
+    if extra_kernels is None:
+        extra_kernels = {}
+
+    context = _context or xo.context_default
+    buffer = context.new_buffer()
+
+    tracker = object.__new__(Tracker)
+    tracker.line = SimpleNamespace(config=TrackerConfig())
+    tracker.line.config.update(config)
+    tracker.use_prebuilt_kernels = False
+    tracker.extra_headers = extra_headers
+    tracker.track_flags = track_flags or TrackFlags()
+    tracker_data = _ClassBasedTrackerDataForKernelBuild(
+        buffer=buffer,
+        kernel_element_classes=get_kernel_element_classes_from_element_classes(
+            element_classes,
+            extra_element_classes=extra_element_classes,
+        ),
+    )
+    tracker._tracker_data_cache = {None: tracker_data}
+
+    return tracker._build_kernel(
+        compile=compile,
+        module_name=module_name,
+        containing_dir=containing_dir,
+        extra_classes=[_xostruct_from_class(cls) for cls in extra_classes],
+        extra_kernels=extra_kernels,
+        _skip_prebuilt=True,
+    )
 
 class Tracker:
 
@@ -441,6 +543,7 @@ class Tracker:
             containing_dir='.',
             extra_classes=[],
             extra_kernels={},
+            _skip_prebuilt=False,
     ):
         if compile == 'force':
             use_prebuilt_kernels = False
@@ -449,7 +552,7 @@ class Tracker:
         else:
             use_prebuilt_kernels = self.use_prebuilt_kernels
 
-        if use_prebuilt_kernels:
+        if use_prebuilt_kernels and not _skip_prebuilt:
             try:
                 from xsuite import (
                     get_suitable_kernel,
@@ -474,6 +577,21 @@ class Tracker:
                     kernel_descriptions={'track_line': kernel_description},
                 )
                 return kernels['track_line']
+
+        if not _skip_prebuilt:
+            return build_track_kernel_from_classes(
+                element_classes=self._tracker_data_base.kernel_element_classes,
+                config=self.config,
+                extra_classes=extra_classes,
+                extra_element_classes=(),
+                extra_kernels=extra_kernels,
+                module_name=module_name,
+                containing_dir=containing_dir,
+                compile=compile,
+                _context=self._context,
+                extra_headers=self.extra_headers,
+                track_flags=self.track_flags,
+            )
 
         context = self._tracker_data_base._buffer.context
 
