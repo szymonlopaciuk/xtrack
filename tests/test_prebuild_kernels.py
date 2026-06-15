@@ -283,3 +283,32 @@ def test_clear_kernels_preserves_other_context(tmp_path):
     assert not (tmp_path / 'test_module_cpu_openmp.json').exists()
     assert not (tmp_path / 'test_module_cpu_openmp.c').exists()
     assert not (tmp_path / 'test_module_cpu_openmp.cpython-311-darwin.so').exists()
+
+
+def test_tracker_save_kernel(mocker, tmp_path, temp_context_default_func):
+
+    skip_if_forbid_compile()
+
+    mocker.patch('xsuite.prebuild_kernels.XSK_PREBUILT_KERNELS_LOCATION', tmp_path)
+    mocker.patch('xsuite.XSK_PREBUILT_KERNELS_LOCATION', tmp_path)
+
+    line = xt.Line(elements=[xt.Drift(length=2.0)])
+    line.build_tracker(_context=xo.ContextCpu(), use_prebuilt_kernels=False)
+    metadata_file = line.tracker.save_kernel('saved_kernel')
+
+    assert metadata_file == tmp_path / 'saved_kernel_cpu_serial.json'
+    assert metadata_file.exists()
+    so_file, = tmp_path.glob('saved_kernel_cpu_serial.*.so')
+    assert so_file.exists()
+    assert (tmp_path / 'saved_kernel_cpu_serial.c').exists()
+
+    cffi_compile = mocker.patch.object(cffi.FFI, 'compile')
+
+    line2 = xt.Line(elements=[xt.Drift(length=2.0)])
+    line2.build_tracker(_context=xo.ContextCpu())
+    p = xt.Particles(p0c=1e9, px=3e-6)
+    line2.track(p)
+
+    assert p.x == 6e-6
+    assert p.y == 0.0
+    cffi_compile.assert_not_called()

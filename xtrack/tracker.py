@@ -5,6 +5,7 @@
 from time import perf_counter
 from typing import Literal, Union
 import logging
+from pathlib import Path
 from warnings import warn
 from collections import UserDict, defaultdict
 
@@ -1561,6 +1562,44 @@ class Tracker:
             context=self._context,
             verbose=True
         )
+
+    def save_kernel(self, name, containing_dir=None):
+        if not isinstance(self._context, xo.ContextCpu):
+            raise NotImplementedError(
+                'Tracker.save_kernel is only supported on ContextCpu.'
+            )
+
+        from xsuite.prebuild_kernels import (
+            XSK_PREBUILT_KERNELS_LOCATION,
+            _context_key_from_runtime,
+            _module_name_for_context,
+            save_kernel_metadata,
+        )
+
+        context_key = _context_key_from_runtime(self._context)
+        assert context_key is not None
+
+        containing_dir = Path(containing_dir or XSK_PREBUILT_KERNELS_LOCATION)
+        module_name = _module_name_for_context(name, context_key)
+
+        _, tracker_data = self.get_track_kernel_and_data_for_present_config()
+        self._build_kernel(
+            compile='force',
+            module_name=module_name,
+            containing_dir=containing_dir,
+        )
+
+        save_kernel_metadata(
+            module_name=module_name,
+            base_module_name=name,
+            context_key=context_key,
+            config=self.config,
+            tracker_element_classes=tracker_data.kernel_element_classes,
+            all_classes=tracker_data.kernel_element_classes,
+            location=containing_dir,
+        )
+
+        return containing_dir / f'{module_name}.json'
 
     def _handle_time_dependent_vars(self, particles):
 
