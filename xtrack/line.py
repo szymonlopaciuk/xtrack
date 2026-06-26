@@ -3532,9 +3532,9 @@ class Line:
             # Insert the new elements in the line
             line.insert([
                 env.place('s1', at=5.),
-                env.place('s2', anchor='end', at=-5., from_='start@q1'),
-                env.place(['m1', 'm2'], at='start@m0'),
-                env.place('m3', at='end@m0'),
+                env.place('s2', anchor='end', at=-5., from_='q1@start'),
+                env.place(['m1', 'm2'], at='m0@start'),
+                env.place('m3', at='m0@end'),
                 ])
 
         .. code-block:: python
@@ -3551,7 +3551,7 @@ class Line:
 
             # Alternatively, add the element to the environment and then do the insertion:
             env.elements['ap1'] = myaperture
-            line.insert('ap1', at='start@q0')
+            line.insert('ap1', at='q0@start')
 
         """
 
