@@ -184,6 +184,13 @@ def _straight_pose_in_survey_frame(straight_pose, survey_reference_s):
     return pose_in_straight_reference
 
 
+def _pipe_middle_shift_s(pipe):
+    positions_s = [position.shift_s for position in pipe.positions]
+    if not positions_s:
+        return 0.0
+    return 0.5 * (min(positions_s) + max(positions_s))
+
+
 # See https://edms.cern.ch/document/2405052/1.0
 LDB_SHAPE_TO_XS = {
     'CIRCLE': ('Circle', ['radius']),
@@ -367,6 +374,10 @@ sv_names = [sv.name[idx] for idx in sv_indices]
 assert len(set(sv.name)) == len(sv.name), "There are non-unique survey names, which might be a problem"
 transform_to_sv_point = dict(zip([transform_name for transform_name, _ in pipes_loc], sv_names))
 
+line_table = sps.get_table()
+element_type_by_name = dict(zip(line_table.name, line_table.element_type))
+s_center_by_name = dict(zip(line_table.name, line_table.s_center))
+
 # Place pipes in the model
 for transform_name, mad_point in pipes_loc:
     # if transform_name in excluded_pipe_positions:
@@ -375,18 +386,36 @@ for transform_name, mad_point in pipes_loc:
     type_name = ldb_model.transformations[transform_name].target_type
     pipe_to_place = type_name
 
+    survey_ref = transform_to_sv_point[transform_name]
+    if element_type_by_name[survey_ref] == 'RBend':
+        # RBends have a straight body. The selected survey reference is still
+        # determined by the pipe middle, but installation must be relative to
+        # the magnet centre so the straight pipe body is aligned with the
+        # straight magnet body rather than with the entry frame.
+        pipe_middle_pose = pipes_loc_middles[transform_name].matrix
+        pipe_middle_shift_s = _pipe_middle_shift_s(builder._pipes[pipe_to_place])
+        mad_point_pose = (
+            pipe_middle_pose
+            @ transform_matrix(shift_x=-sps[survey_ref]._x0_mid)  # RBend offset
+            @ transform_matrix(shift_z=-pipe_middle_shift_s)
+        )
+        survey_ref_s = float(s_center_by_name[survey_ref])
+        at = f'{survey_ref}@centre'
+    else:
+        mad_point_pose = mad_point.matrix
+        survey_ref_s = float(sv['s', survey_ref])
+        at = survey_ref
+
     # The LDB pose is expressed in a straight global frame, with z equal to
     # longitudinal s. Convert it to the local frame of the selected Xtrack
     # survey point; Aperture then supplies that point's curved world pose.
-    survey_ref = transform_to_sv_point[transform_name]
-    survey_ref_s = float(sv['s', survey_ref])
     from_ref_to_here = _straight_pose_in_survey_frame(
-        mad_point.matrix,
+        mad_point_pose,
         survey_ref_s,
     )
 
     if pipe_to_place:
-        builder.place_pipe(transform_name, pipe_to_place, transformation=from_ref_to_here, at=survey_ref)
+        builder.place_pipe(transform_name, pipe_to_place, transformation=from_ref_to_here, at=at)
 
 # Clip the pipe that crosses the ring boundary. This avoids placing the single-turn model
 # past _end_point until the aperture model supports wrapped pipe spans.
@@ -422,108 +451,3 @@ plt.plot(sv.Z, sv.X, color='blue', marker='o', linestyle='none')
 aperture.plot_floor_projection(ax=ax, aspect='equal')
 plt.title('SPS Aperture and Survey Floor Plot')
 plt.show()
-
-
-# # Find all the magnets that are controlled by the "a.mb" knob
-# main_dipoles = [
-#     ref._owner._key for ref in b1.vars['a.mb'].xdeps.controlled_targets
-#     if isinstance(ref, xd.refs.AttrRef) and ref._key == 'angle'
-# ]
-# elements_b1 = set(b1.element_names)
-# main_dipoles_b1 = [name for name in main_dipoles if name in set(elements_b1)]
-#
-# # Plot the element boxes vs the relevant pipe boxes to see how we match
-# sv_dipoles_b1 = sv_b1_straight.rows[main_dipoles_b1]
-# magnet_boxes = zip(sv_dipoles_b1.Z, sv_dipoles_b1.length, sv_dipoles_b1.name)
-# BOX_HEIGHT = 1
-#
-# fig, ax = plt.subplots()
-#
-# def _draw_boxes(boxes, height=1., label_rotation=0, label_y=0., label_size=6,
-#                 label_va='center', **kwargs):
-#     for x, width, label in boxes:
-#         rect = Rectangle(
-#             (x, -height * BOX_HEIGHT),
-#             width,
-#             2 * height * BOX_HEIGHT,
-#             **kwargs,
-#         )
-#         ax.add_patch(rect)
-#         ax.text(
-#             x + width / 2,
-#             label_y * height * BOX_HEIGHT,
-#             label,
-#             ha='center',
-#             va=label_va,
-#             rotation=label_rotation,
-#             fontsize=label_size,
-#             clip_on=True,
-#         )
-#
-# _draw_boxes(
-#     magnet_boxes,
-#     edgecolor='black',
-#     facecolor='skyblue',
-#     alpha=0.7,
-#     label_rotation=90,
-#     label_y=1.15,
-#     label_size=9,
-#     label_va='bottom',
-# )
-#
-# # Also plot the relevant type boxes
-# pipe_labels = [f'{name}\nref: {ref}' for name, ref in zip(p_tab.name, p_tab.survey_reference)]
-# pipe_boxes = zip(p_tab.s_span_start, p_tab.span, pipe_labels)
-# _draw_boxes(
-#     pipe_boxes,
-#     edgecolor='black',
-#     facecolor='pink',
-#     alpha=0.7,
-#     height=0.5,
-#     label_rotation=90,
-#     label_size=8,
-#     label_y=-1.15,
-#     label_va='top',
-# )
-#
-# # Set plot limits
-# ax.set_xlim(0, b1.get_length())
-# ax.set_ylim(-5 * BOX_HEIGHT - 1, 5 * BOX_HEIGHT + 1)
-#
-# plt.show()
-#
-#
-# # Sanity checks for main dipoles
-# table_main_dipoles_pipe_model = p_tab.rows[np.isin(p_tab.survey_reference, main_dipoles)]
-# assert set(main_dipoles_b1) == set(table_main_dipoles_pipe_model.survey_reference)  # All dipoles have pipes assigned?
-#
-# main_dipole_pipes = set(table_main_dipoles_pipe_model.pipe_name)
-# indices_with_dipole_pipes = np.isin(p_tab.pipe_name, list(main_dipole_pipes))
-# indices_not_main_dipoles = ~np.isin(p_tab.survey_reference, main_dipoles)
-# assert len(p_tab.rows[indices_with_dipole_pipes & indices_not_main_dipoles]) == 0  # Main dipole pipes not elsewhere?
-#
-#
-# # Unbend the model!
-# b1.regenerate_from_composer()
-# b2.regenerate_from_composer()
-#
-# lattice.vars['a.mb'] = angle_before
-# lattice.vars['ds'] = ds_before
-#
-# b1.end_compose()
-# b2.end_compose()
-#
-# sv_b1 = b1.survey()
-# sv_b2 = b2.survey(theta0=np.pi)
-#
-# for pipe_name in main_dipole_pipes:
-#     a_dipole_name = p_tab.rows[p_tab.pipe_name == pipe_name].survey_reference[0]
-#     pipe = aperture_straight.pipes[pipe_name]
-#     pipe.curvature = b1[a_dipole_name].angle / pipe.length
-#
-# # UNDO THE EARLIER PATCH
-# # aperture_model.pipes[aperture_model.pipe_names.index('HCVC1IB')].shift_s = old_hcvc1ib_last_shift_s
-#
-# # Build the curved model
-# aperture = Aperture(model=aperture_model, line=b1, s_tol=PIPE_OVERLAP_TOL, context=context)
-# aperture.to_json('b1_aperture.json')
