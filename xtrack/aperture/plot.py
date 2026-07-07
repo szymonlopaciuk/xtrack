@@ -246,8 +246,8 @@ def _installed_profile_projection(
     normal_axis: int,
     curvature: float,
 ) -> _ProjectedProfile | None:
-    profile = profile_position.profile.raw
-    profile_to_pipe = _profile_to_pipe_matrix(profile_position.raw, curvature)
+    profile = profile_position.profile
+    profile_to_pipe = _profile_to_pipe_matrix(profile_position, curvature)
     profile_to_plot = pipe_to_plot @ profile_to_pipe
     segment_local = _profile_projection_segment(profile.shape, profile_to_plot, normal_axis)
     if segment_local is None:
@@ -344,11 +344,11 @@ def _pipe_axis_points(pipe, curvature: float, max_curve_angle_rad: float) -> np.
 
 
 def _profile_polygon_curvilinear(profile_position, curvature: float, len_points: int) -> np.ndarray:
-    polygon = profile_position.profile.raw.build_polygon(len_points)
+    polygon = profile_position.profile.build_polygon(len_points)
     if len(polygon) > 1 and np.allclose(polygon[0], polygon[-1], atol=_GEOMETRY_TOL, rtol=0):
         polygon = polygon[:-1]
 
-    profile_to_pipe = _profile_to_pipe_matrix(profile_position.raw, curvature)
+    profile_to_pipe = _profile_to_pipe_matrix(profile_position, curvature)
     polygon_homogeneous = np.column_stack([
         polygon,
         np.zeros(len(polygon)),
