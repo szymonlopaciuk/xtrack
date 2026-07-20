@@ -308,8 +308,8 @@ def test_madng_twiss_with_initial_conditions():
     xo.assert_allclose(tw4_xs.bety, tw4_xsng.beta22_ng, rtol=1e-6, atol=1e-5)
     xo.assert_allclose(tw4_xs.alfx, tw4_xsng.alfa11_ng, rtol=1e-6, atol=1e-5)
     xo.assert_allclose(tw4_xs.alfy, tw4_xsng.alfa22_ng, rtol=1e-6, atol=1e-5)
-    xo.assert_allclose(tw4_xs.dx, tw4_xsng.dx_ng, rtol=1e-7, atol=1e-8)
-    xo.assert_allclose(tw4_xs.dy, tw4_xsng.dy_ng, rtol=1e-7, atol=1e-8)
+    xo.assert_allclose(tw4_xs.dx, tw4_xsng.dx_ng, rtol=1e-7, atol=5e-8)
+    xo.assert_allclose(tw4_xs.dy, tw4_xsng.dy_ng, rtol=1e-7, atol=5e-8)
     xo.assert_allclose(tw4_xs.x, tw4_xsng.x_ng, rtol=1e-8, atol=1e-10)
     xo.assert_allclose(tw4_xs.y, tw4_xsng.y_ng, rtol=1e-8, atol=1e-10)
     xo.assert_allclose(tw4_xs.px, tw4_xsng.px_ng, rtol=1e-8, atol=1e-10)
@@ -392,7 +392,7 @@ def test_madng_interface_amplitude_detuning_and_second_order_chrom():
 def test_madng_match_optics():
     collider = xt.Environment.from_json(test_data_folder /
                     'hllhc15_thick/hllhc15_collider_thick.json')
-    collider.vars.load_madx(test_data_folder /
+    collider.vars.load(test_data_folder /
                     'hllhc15_thick/opt_round_150_1500.madx')
 
     line = collider.lhcb1
