@@ -101,7 +101,7 @@ def test_new_fringe_maps_round_trip(test_context, name):
     line.track(p)
     assert np.max(np.abs(_coords(p.copy()) - _coords(p0.copy()))) > 1e-5
     line.track(p, backtrack=True)
-    assert np.all(p.state == 1)
+    assert np.all(p._context.nparray_from_context_array(p.state) == 1)
     np.testing.assert_allclose(_coords(p), _coords(p0), rtol=0, atol=1e-14)
 
 
