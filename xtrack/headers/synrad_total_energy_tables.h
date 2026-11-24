@@ -55923,7 +55923,7 @@ XTRACK_SYNRAD_TABLE_QUALIFIER double synrad_total_energy_log_table_256[XTRACK_SY
 };
 
 GPUFUN
-const double* synrad_get_total_energy_log_table_power2(int64_t nphot){
+GPUGLMEM const double* synrad_get_total_energy_log_table_power2(int64_t nphot){
     switch(nphot){
         case 1: return synrad_total_energy_log_table_1;
         case 2: return synrad_total_energy_log_table_2;
@@ -55939,7 +55939,7 @@ const double* synrad_get_total_energy_log_table_power2(int64_t nphot){
 }
 
 GPUFUN
-const double* synrad_get_total_energy_log_table_direct32(int64_t nphot){
+GPUGLMEM const double* synrad_get_total_energy_log_table_direct32(int64_t nphot){
     switch(nphot){
         case 1: return synrad_total_energy_log_table_1;
         case 2: return synrad_total_energy_log_table_2;

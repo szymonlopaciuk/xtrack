@@ -360,7 +360,7 @@ double synrad_total_energy_interpolate_log_table(
 
 GPUFUN
 double synrad_gen_total_energy_normalized_from_log_table(
-        LocalParticle *part, const double* table){
+        LocalParticle *part, GPUGLMEM const double* table){
 
     // For each emitted fixed photon count table, the table stores
     // log(F_nphot^{-1}(u)), where F_nphot is the CDF of the sum of nphot

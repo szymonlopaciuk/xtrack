@@ -940,7 +940,7 @@ def main():
             )
 
         fid.write("GPUFUN\n")
-        fid.write("const double* synrad_get_total_energy_log_table_power2(int64_t nphot){\n")
+        fid.write("GPUGLMEM const double* synrad_get_total_energy_log_table_power2(int64_t nphot){\n")
         fid.write("    switch(nphot){\n")
         for power in POWERS:
             fid.write(
@@ -949,7 +949,7 @@ def main():
         fid.write("    }\n")
         fid.write("}\n\n")
         fid.write("GPUFUN\n")
-        fid.write("const double* synrad_get_total_energy_log_table_direct32(int64_t nphot){\n")
+        fid.write("GPUGLMEM const double* synrad_get_total_energy_log_table_direct32(int64_t nphot){\n")
         fid.write("    switch(nphot){\n")
         for power in range(1, DIRECT_TABLE_MAX + 1):
             fid.write(
