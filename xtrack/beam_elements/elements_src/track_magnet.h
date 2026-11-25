@@ -88,24 +88,12 @@ void magnet_total_multipoles(
 
 #if !defined(XTRACK_TPSA_TRACK) && !defined(XTRACK_MULTIPOLE_NO_SYNRAD)
 // Spin and radiation over a step of length ll of the body, from the
-// coordinates before it (old_*) and after it (the particle). The body's
-// fields come as values: a pointer to the body would keep it out of
-// registers in every magnet class (GPU).
+// coordinates before it (old_*) and after it (the particle).
 GPUFUN XT_NOINLINE
 void magnet_body_spin_radiation(
     LocalParticle* part,
-    const MagnetField* field,
+    const MagnetBody* body,
     double const taper,
-    double const length,
-    double const inv_factorial_order,
-    double const factor_knl_ksl,
-    double const ks,
-    double const dks_ds,
-    double const x0_solenoid,
-    double const y0_solenoid,
-    double const h_radiation,
-    int64_t const radiation_flag,
-    MagnetRadiationRecord radiation_record,
     double const ll,
     double const old_x,
     double const old_y,
@@ -116,6 +104,17 @@ void magnet_body_spin_radiation(
     double* dpx_record_exit,
     double* dpy_record_exit
 ) {
+    const MagnetField* field = body->field;
+    double const length = body->length;
+    double const inv_factorial_order = body->inv_factorial_order;
+    double const factor_knl_ksl = body->factor_knl_ksl;
+    double const ks = body->drift.ks;
+    double const dks_ds = body->dks_ds;
+    double const x0_solenoid = body->drift.x0_solenoid;
+    double const y0_solenoid = body->drift.y0_solenoid;
+    double const h_radiation = body->h_radiation;
+    int64_t const radiation_flag = body->radiation_flag;
+    MagnetRadiationRecord radiation_record = body->radiation_record;
     double Bx_T, By_T, Bz_T;
     double const new_kin_px = LocalParticle_get_px(part) - LocalParticle_get_ax(part);
     double const new_kin_py = LocalParticle_get_py(part) - LocalParticle_get_ay(part);
@@ -201,11 +200,7 @@ void track_magnet_body_single_particle(
             code; \
             if (length > 0) { /* spin always, radiation if radiation_flag */ \
                 magnet_body_spin_radiation( \
-                    part, body->field, taper, length, body->inv_factorial_order, \
-                    body->factor_knl_ksl, body->drift.ks, body->dks_ds, \
-                    body->drift.x0_solenoid, body->drift.y0_solenoid, \
-                    body->h_radiation, body->radiation_flag, body->radiation_record, \
-                    (ll), old_x, old_y, old_zeta, old_kin_px, old_kin_py, \
+                    part, body, taper, (ll), old_x, old_y, old_zeta, old_kin_px, old_kin_py, \
                     dp_record_exit, dpx_record_exit, dpy_record_exit \
                 ); \
             } \
