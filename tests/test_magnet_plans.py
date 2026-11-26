@@ -22,12 +22,12 @@ def _line():
     return line
 
 
-def test_plan_layout_matches_c():
-    # The kernel fails to compile if PLAN_DTYPE differs from MagnetPlan
+def test_plan_is_an_xobject():
     line = _line()
-    line.config.XTRACK_CHECK_MAGNET_PLAN_LAYOUT = True
     line.build_tracker()
-    assert magnet_plans.PLAN_DTYPE.itemsize <= magnet_plans.MAGNET_PLAN_BYTES
+    line.track(line.build_particles(x=[0]))
+    plans = line.tracker._magnet_plans.plans
+    assert isinstance(plans[0], magnet_plans.MagnetPlan)
 
 
 def test_get_magnet_plan():

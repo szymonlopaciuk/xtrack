@@ -150,47 +150,6 @@ void track_magnet_kick_single_particle(
 }
 
 
-// Apply a prepared kick, with kick_weight the fraction of the body it covers
-// and taper the factor of the strengths (tapering, 1 otherwise)
-GPUFUN XT_INLINE
-void MagnetKick_apply(
-    LocalParticle* part,
-    const MagnetKick* kick,
-    double kick_weight,
-    double taper
-) {
-    track_magnet_kick_single_particle(
-        part,
-        kick_weight,
-        taper,
-        kick->length,
-        kick->order,
-        kick->inv_factorial_order,
-        kick->knl,
-        kick->ksl,
-        kick->factor_knl_ksl,
-        kick->knl_main[0],
-        kick->knl_main[1],
-        kick->knl_main[2],
-        kick->knl_main[3],
-        kick->ksl_main[0],
-        kick->ksl_main[1],
-        kick->ksl_main[2],
-        kick->ksl_main[3],
-        kick->h,
-        kick->hxl,
-        kick->htot,
-        kick->k0_h_coeff,
-        kick->k1_h_coeff,
-        kick->rot_frame,
-        kick->do_drift_correction,
-        kick->is_empty,
-        kick->has_main,
-        kick->has_curvature
-    );
-}
-
-
 GPUFUN
 uint8_t kick_is_inactive(
     int64_t order,

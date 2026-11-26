@@ -89,29 +89,37 @@
 GPUFUN XT_NOINLINE
 void CONCAT(ELEMENT_NAME, _prepare_plan)(
     ELEMENT_DATA el,
-    MagnetPlan* plan,
+    MagnetPlan plan,
     LocalParticle* part0
 ) {
     CONCAT(ELEMENT_NAME, _prepare_magnet)(el, plan, part0);
 
     // Statically thick classes only: the global aperture is checked after them
     #ifdef IS_THICK
-        plan->is_thick = 1;
+        MagnetPlan_set_is_thick(plan, 1);
     #endif
 
     #ifdef ALLOW_ROT_AND_SHIFT
-        MagnetTransform* tr = &plan->transform;
-        tr->shift_x = GET_PARAM(el, shift_x);
-        tr->shift_y = GET_PARAM(el, shift_y);
-        tr->shift_s = GET_PARAM(el, shift_s);
-        tr->rot_x_rad = GET_PARAM(el, rot_x_rad);
-        tr->rot_y_rad = GET_PARAM(el, rot_y_rad);
-        tr->rot_s_rad = GET_PARAM(el, rot_s_rad);
-        tr->rot_s_rad_no_frame = GET_PARAM(el, rot_s_rad_no_frame);
-        tr->active = NONZERO(tr->shift_x) || NONZERO(tr->shift_y) || NONZERO(tr->shift_s)
-                     || NONZERO(tr->rot_x_rad) || NONZERO(tr->rot_y_rad)
-                     || NONZERO(tr->rot_s_rad) || NONZERO(tr->rot_s_rad_no_frame);
-        if (!tr->active) return;
+        const MagnetTransform tr = MagnetPlan_getp_transform(plan);
+        const double shift_x = GET_PARAM(el, shift_x);
+        const double shift_y = GET_PARAM(el, shift_y);
+        const double shift_s = GET_PARAM(el, shift_s);
+        const double rot_x_rad = GET_PARAM(el, rot_x_rad);
+        const double rot_y_rad = GET_PARAM(el, rot_y_rad);
+        const double rot_s_rad = GET_PARAM(el, rot_s_rad);
+        const double rot_s_rad_no_frame = GET_PARAM(el, rot_s_rad_no_frame);
+        const uint8_t active = NONZERO(shift_x) || NONZERO(shift_y) || NONZERO(shift_s)
+                               || NONZERO(rot_x_rad) || NONZERO(rot_y_rad)
+                               || NONZERO(rot_s_rad) || NONZERO(rot_s_rad_no_frame);
+        MagnetTransform_set_shift_x(tr, shift_x);
+        MagnetTransform_set_shift_y(tr, shift_y);
+        MagnetTransform_set_shift_s(tr, shift_s);
+        MagnetTransform_set_rot_x_rad(tr, rot_x_rad);
+        MagnetTransform_set_rot_y_rad(tr, rot_y_rad);
+        MagnetTransform_set_rot_s_rad(tr, rot_s_rad);
+        MagnetTransform_set_rot_s_rad_no_frame(tr, rot_s_rad_no_frame);
+        MagnetTransform_set_active(tr, active);
+        if (!active) return;
 
         const double weight = GET_WEIGHT(el);
         #if defined(IS_THICK_DYNAMIC)
@@ -121,42 +129,78 @@ void CONCAT(ELEMENT_NAME, _prepare_plan)(
         #else
             const double length = 0.0;
         #endif
-        tr->length = length * weight;
+        MagnetTransform_set_length(tr, length * weight);
         #ifdef CURVED
-            tr->curved = 1;
-            tr->angle = GET_PARAM(el, angle) * weight;
-            tr->h = GET_PARAM(el, h);
+            MagnetTransform_set_curved(tr, 1);
+            MagnetTransform_set_angle(tr, GET_PARAM(el, angle) * weight);
+            MagnetTransform_set_h(tr, GET_PARAM(el, h));
         #else
-            tr->curved = 0;
-            tr->angle = 0.;
-            tr->h = 0.;
+            MagnetTransform_set_curved(tr, 0);
+            MagnetTransform_set_angle(tr, 0.);
+            MagnetTransform_set_h(tr, 0.);
         #endif
 
-        tr->anchor = GET_PARAM(el, rot_shift_anchor);
+        double anchor = GET_PARAM(el, rot_shift_anchor);
         #ifdef IS_SLICE
-            tr->anchor -= ELEMENT_GET(el, slice_offset);
+            anchor -= ELEMENT_GET(el, slice_offset);
         #endif
+        MagnetTransform_set_anchor(tr, anchor);
 
-        tr->invalid = 0;
+        uint8_t invalid = 0;
         #ifdef THIN_SLICE_OF_CURVED_ELEMENT
-            tr->invalid = tr->rot_x_rad != 0.0 || tr->rot_y_rad != 0.0
-                          || tr->rot_s_rad_no_frame != 0.0;
+            invalid = rot_x_rad != 0.0 || rot_y_rad != 0.0 || rot_s_rad_no_frame != 0.0;
         #endif
+        MagnetTransform_set_invalid(tr, invalid);
     #endif
 }
 
-/* Tracking of the element on its own (element.track(), TPSA): its plan is
-   made here, for the particles at hand.
+#ifndef XTRACK_TPSA_TRACK
+/* Tracking of the element on its own (element.track()): its plan is prepared
+   by ELEMENT_NAME_prepare_plan_kernel, in a plan of the element, then the
+   particles are tracked through it.
+*/
+GPUFUN
+void CONCAT(ELEMENT_NAME, _track_local_particle_with_transformations)(
+    ELEMENT_DATA el,
+    LocalParticle* part0,
+    MagnetPlan plan
+) {
+    track_magnet_particles(part0, plan);
+}
+
+/* Prepare the plan of the element for element.track(): one thread (the
+   track flags of element.track() are those of forward tracking). */
+GPUKERN
+void CONCAT(ELEMENT_NAME, _prepare_plan_kernel)(
+    ELEMENT_DATA el,
+    MagnetPlan plan,
+    GPUGLMEM int8_t* io_buffer
+) {
+    #if defined(XO_CONTEXT_CUDA)
+        if (blockDim.x * blockIdx.x + threadIdx.x != 0) return;
+    #elif defined(XO_CONTEXT_CL)
+        if (get_global_id(0) != 0) return;
+    #endif
+    LocalParticle lpart;
+    lpart.io_buffer = io_buffer;
+    lpart.track_flags = 0;
+    CONCAT(ELEMENT_NAME, _prepare_plan)(el, plan, &lpart);
+}
+#else
+/* TPSA tracking of the element on its own: its plan is made here, its TPSAs
+   owned by C (MagnetPlanTpsaStorage)
 */
 GPUFUN
 void CONCAT(ELEMENT_NAME, _track_local_particle_with_transformations)(
     ELEMENT_DATA el,
     LocalParticle* part0
 ) {
-    MagnetPlan plan;
-    CONCAT(ELEMENT_NAME, _prepare_plan)(el, &plan, part0);
-    track_magnet_particles(part0, &plan);
+    MagnetPlanTpsaStorage storage;
+    const MagnetPlan plan = storage.plan();
+    CONCAT(ELEMENT_NAME, _prepare_plan)(el, plan, part0);
+    track_magnet_particles(part0, plan);
 }
+#endif
 
 #else /* MAGNET_PLAN */
 

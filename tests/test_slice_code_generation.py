@@ -23,7 +23,7 @@ def test_generated_slice_edge_models(tmp_path):
     runpy.run_path(str(tmp_path / generator))
 
     # A slice keeps the faces it has: the body slices none, an edge slice its
-    # own face only (the others stay MagnetFace_empty, which does nothing),
+    # own face only (the others stay reset, MagnetPlan_new_face, which does nothing),
     # and an edge slice has no body
     for parent in ('quadrupole', 'bend', 'uniform_solenoid'):
         for filename, faces, body in [

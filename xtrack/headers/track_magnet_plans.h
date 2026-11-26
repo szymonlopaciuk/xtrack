@@ -9,7 +9,7 @@
 
    A magnet is tracked in two steps. Once per track call, the kernel
    prepare_magnet_plans reads the attributes of each magnet and stores them,
-   ready to use, in its MagnetPlan. The track kernel then tracks every
+   ready to use, in its MagnetPlan (an xobjects struct). The track kernel then tracks every
    particle through the plan with track_magnet_particles.
 
    This header is inlined in the track kernel source right after the switch
@@ -21,14 +21,6 @@
 
 #ifndef XTRACK_TPSA_TRACK
 
-    // The plans are MAGNET_PLAN_BYTES apart (set in magnet_plans.py)
-    #if defined(__cplusplus)
-static_assert(sizeof(MagnetPlan) <= MAGNET_PLAN_BYTES, "MAGNET_PLAN_BYTES too small");
-    #elif !defined(XO_CONTEXT_CL)  // OpenCL C has no static assertion
-_Static_assert(sizeof(MagnetPlan) <= MAGNET_PLAN_BYTES, "MAGNET_PLAN_BYTES too small");
-    #endif
-
-
 /* Fill the plans in the slots [first_plan, first_plan + num_plans), one
    thread per plan. magnet_plan_elements[slot] is the index of the magnet of
    the slot in the line.
@@ -37,7 +29,7 @@ _Static_assert(sizeof(MagnetPlan) <= MAGNET_PLAN_BYTES, "MAGNET_PLAN_BYTES too s
 void prepare_magnet_plans(
     /*gpuglmem*/ int8_t* buffer,
     ElementRefData elem_ref_data,
-    /*gpuglmem*/ int8_t* magnet_plans,
+    ArrNMagnetPlan magnet_plans,
     /*gpuglmem*/ int64_t* magnet_plan_elements,
     int64_t first_plan,
     int64_t num_plans,
@@ -56,8 +48,7 @@ void prepare_magnet_plans(
         const int64_t elem_idx = magnet_plan_elements[slot];
         /*gpuglmem*/ void* el = ElementRefData_member_elements(elem_ref_data, elem_idx);
         const int64_t elem_type = ElementRefData_typeid_elements(elem_ref_data, elem_idx);
-        MagnetPlan* plan = (MagnetPlan*)(magnet_plans + MAGNET_PLAN_BYTES * slot);
-        prepare_magnet_plan(el, elem_type, plan, &lpart);
+        prepare_magnet_plan(el, elem_type, ArrNMagnetPlan_getp1(magnet_plans, slot), &lpart);
     END_VECTORIZE;
     // clang-format on
 }

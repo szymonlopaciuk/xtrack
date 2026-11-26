@@ -16,7 +16,7 @@
 GPUFUN
 void VariableSolenoid_prepare_magnet(
         VariableSolenoidData el,
-        MagnetPlan* plan,
+        MagnetPlan plan,
         LocalParticle* part0
 ) {
     double const ks_entry = VariableSolenoidData_get_ks_profile(el, 0);
@@ -39,14 +39,14 @@ void VariableSolenoid_prepare_magnet(
 
     // Each active face also sets the vector potential of the field at its end,
     // entering and leaving (Wolsky Eq. 3.114 and Eq. 2.74)
-    MagnetFace entry_face = MagnetFace_empty(0);
+    MagnetFace entry_face = MagnetPlan_new_face(plan, 0, part0);
     EDGE_LOAD_STRAIGHT(entry_face, VariableSolenoidData_get_, el, entry);
-    entry_face.has_ks = 1;
-    entry_face.ks = ks_entry;
-    MagnetFace exit_face = MagnetFace_empty(1);
+    MagnetFace_set_has_ks(entry_face, 1);
+    MagnetFace_set_ks(entry_face, ks_entry);
+    MagnetFace exit_face = MagnetPlan_new_face(plan, 1, part0);
     EDGE_LOAD_STRAIGHT(exit_face, VariableSolenoidData_get_, el, exit);
-    exit_face.has_ks = 1;
-    exit_face.ks = ks_exit;
+    MagnetFace_set_has_ks(exit_face, 1);
+    MagnetFace_set_ks(exit_face, ks_exit);
 
     // Settings aligned by hand: not formatted
     // clang-format off
@@ -73,7 +73,7 @@ void VariableSolenoid_prepare_magnet(
     //     rbend_compensate_sagitta, rbend_shift, rbend_angle_diff,
     //     length_straight, body_active
     // clang-format on
-    MagnetPlan_prepare(plan, &magnet, &entry_face, &exit_face, part0);
+    MagnetPlan_prepare(plan, &magnet, part0);
 }
 
 #endif

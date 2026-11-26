@@ -13,6 +13,7 @@ from ..random import (
 )
 from ._common import (
     _NOEXPR_FIELDS,
+    SynchrotronRadiationRecord,
     _HasKnlKsl,
 )
 from ._edge import (
@@ -74,6 +75,7 @@ class MagnetEdge(_HasKnlKsl, BeamElement):
     """
     isthick = True
     has_backtrack = True
+    _magnet_plan = True  # a magnet of faces only (magnet_plans.py)
 
     _xofields = {
         # Fringe mask of the face (edge_flags.h)
@@ -99,6 +101,8 @@ class MagnetEdge(_HasKnlKsl, BeamElement):
     ]
 
     _depends_on = [RandomUniformAccurate, RandomExponential]
+    # A magnet (of faces only): its kernel holds the radiation of the magnets
+    _internal_record_class = SynchrotronRadiationRecord
 
     _repr_fields = [
         'model', 'is_exit', 'kn', 'ks', 'k_order', 'knl', 'ksl', 'kl_order',

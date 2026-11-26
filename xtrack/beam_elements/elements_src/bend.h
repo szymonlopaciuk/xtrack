@@ -17,13 +17,13 @@
 GPUFUN
 void Bend_prepare_magnet(
         BendData el,
-        MagnetPlan* plan,
+        MagnetPlan plan,
         LocalParticle* part0
 ) {
 
-    MagnetFace entry_face = MagnetFace_empty(0);
+    MagnetFace entry_face = MagnetPlan_new_face(plan, 0, part0);
     EDGE_LOAD_BEND(entry_face, BendData_get_, el, entry);
-    MagnetFace exit_face = MagnetFace_empty(1);
+    MagnetFace exit_face = MagnetPlan_new_face(plan, 1, part0);
     EDGE_LOAD_BEND(exit_face, BendData_get_, el, exit);
 
     // Settings aligned by hand: not formatted
@@ -54,7 +54,7 @@ void Bend_prepare_magnet(
     //     rbend_compensate_sagitta, rbend_shift, rbend_angle_diff,
     //     length_straight, body_active
     // clang-format on
-    MagnetPlan_prepare(plan, &magnet, &entry_face, &exit_face, part0);
+    MagnetPlan_prepare(plan, &magnet, part0);
 }
 
 #endif // XTRACK_BEND_H

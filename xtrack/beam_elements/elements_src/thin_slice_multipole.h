@@ -21,12 +21,12 @@
 GPUFUN
 void ThinSliceMultipole_prepare_magnet(
         ThinSliceMultipoleData el,
-        MagnetPlan* plan,
+        MagnetPlan plan,
         LocalParticle* part0
 ) {
 
-    MagnetFace entry_face = MagnetFace_empty(0);
-    MagnetFace exit_face = MagnetFace_empty(1);
+    MagnetFace entry_face = MagnetPlan_new_face(plan, 0, part0);
+    MagnetFace exit_face = MagnetPlan_new_face(plan, 1, part0);
     // The faces (none on a thin multipole), one line each for the slice generator
 
     // Settings aligned by hand: not formatted
@@ -54,7 +54,7 @@ void ThinSliceMultipole_prepare_magnet(
     //     x0_solenoid, y0_solenoid, rbend_model, rbend_compensate_sagitta,
     //     rbend_shift, rbend_angle_diff, length_straight, body_active
     // clang-format on
-    MagnetPlan_prepare(plan, &magnet, &entry_face, &exit_face, part0);
+    MagnetPlan_prepare(plan, &magnet, part0);
 }
 
 #endif

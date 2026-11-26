@@ -88,10 +88,10 @@ MagnetSplit configure_tracking_model(
     }
 
     if (drift_model == DRIFT_MAP_NONE || drift_model == DRIFT_MAP_EXPANDED || drift_model == DRIFT_MAP_EXACT) {
-        split.drift.k0 = 0.0;
-        split.drift.k1 = 0.0;
-        split.drift.h = 0.0;
-        split.drift.ks = 0.0;
+        split.drift_k0 = 0.0;
+        split.drift_k1 = 0.0;
+        split.drift_h = 0.0;
+        split.drift_ks = 0.0;
         split.k0_kick = k0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -100,10 +100,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 1;
     }
     else if (drift_model == DRIFT_MAP_POLAR) {
-        split.drift.k0 = 0.0;
-        split.drift.k1 = 0.0;
-        split.drift.h = h;
-        split.drift.ks = 0.0;
+        split.drift_k0 = 0.0;
+        split.drift_k1 = 0.0;
+        split.drift_h = h;
+        split.drift_ks = 0.0;
         split.k0_kick = k0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -112,10 +112,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
     else if (drift_model == DRIFT_MAP_DIPOLE_QUAD_EXPANDED) {
-        split.drift.k0 = k0;
-        split.drift.k1 = k1;
-        split.drift.h = h;
-        split.drift.ks = 0.0;
+        split.drift_k0 = k0;
+        split.drift_k1 = k1;
+        split.drift_h = h;
+        split.drift_ks = 0.0;
         split.k0_kick = 0.0;
         split.k1_kick = 0.0;
         split.h_kick = h;
@@ -124,10 +124,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
     else if (drift_model == DRIFT_MAP_BEND) {
-        split.drift.k0 = k0;
-        split.drift.k1 = 0.0;
-        split.drift.h = h;
-        split.drift.ks = 0.0;
+        split.drift_k0 = k0;
+        split.drift_k1 = 0.0;
+        split.drift_h = h;
+        split.drift_ks = 0.0;
         split.k0_kick = 0.0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -136,10 +136,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
     else if (drift_model == DRIFT_MAP_BEND_STRAIGHT) {
-        split.drift.k0 = k0;
-        split.drift.k1 = 0.0;
-        split.drift.h = 0.0;
-        split.drift.ks = 0.0;
+        split.drift_k0 = k0;
+        split.drift_k1 = 0.0;
+        split.drift_h = 0.0;
+        split.drift_ks = 0.0;
         split.k0_kick = 0.0;
         split.k1_kick = k1;
         split.h_kick = 0.0;
@@ -148,10 +148,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
     else if (drift_model == DRIFT_MAP_SOLENOID) {
-        split.drift.k0 = 0.0;
-        split.drift.k1 = 0.0;
-        split.drift.h = 0.0;
-        split.drift.ks = ks;
+        split.drift_k0 = 0.0;
+        split.drift_k1 = 0.0;
+        split.drift_h = 0.0;
+        split.drift_ks = ks;
         split.k0_kick = k0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -160,10 +160,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 1;
     }
     else if (drift_model == DRIFT_MAP_BEND_YOSHIDA4) {
-        split.drift.k0 = k0;
-        split.drift.k1 = 0.0;
-        split.drift.h = h;
-        split.drift.ks = 0.0;
+        split.drift_k0 = k0;
+        split.drift_k1 = 0.0;
+        split.drift_h = h;
+        split.drift_ks = 0.0;
         split.k0_kick = 0.0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -172,10 +172,10 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
     else if (drift_model == DRIFT_MAP_BEND_YOSHIDA6) {
-        split.drift.k0 = k0;
-        split.drift.k1 = 0.0;
-        split.drift.h = h;
-        split.drift.ks = 0.0;
+        split.drift_k0 = k0;
+        split.drift_k1 = 0.0;
+        split.drift_h = h;
+        split.drift_ks = 0.0;
         split.k0_kick = 0.0;
         split.k1_kick = k1;
         split.h_kick = h;
@@ -184,9 +184,7 @@ MagnetSplit configure_tracking_model(
         split.kick_rot_frame = 0;
     }
 
-    split.drift.model = drift_model;
-    split.drift.x0_solenoid = 0.;
-    split.drift.y0_solenoid = 0.;
+    split.drift_model = drift_model;
     return split;
 }
 

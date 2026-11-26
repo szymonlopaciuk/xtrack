@@ -20,12 +20,12 @@
 GPUFUN
 void ThinSliceRBendExit_prepare_magnet(
         ThinSliceRBendExitData el,
-        MagnetPlan* plan,
+        MagnetPlan plan,
         LocalParticle* part0
 ) {
 
-    MagnetFace entry_face = MagnetFace_empty(0);
-    MagnetFace exit_face = MagnetFace_empty(1);
+    MagnetFace entry_face = MagnetPlan_new_face(plan, 0, part0);
+    MagnetFace exit_face = MagnetPlan_new_face(plan, 1, part0);
     EDGE_LOAD_BEND(exit_face, ThinSliceRBendExitData_get__parent_, el, exit);
 
     // Settings aligned by hand: not formatted
@@ -57,7 +57,7 @@ void ThinSliceRBendExit_prepare_magnet(
     //     weight, num_multipole_kicks, model, integrator, radiation_record,
     //     hxl, k3, k0s, k1s, k2s, k3s, ks, dks_ds, x0_solenoid, y0_solenoid
     // clang-format on
-    MagnetPlan_prepare(plan, &magnet, &entry_face, &exit_face, part0);
+    MagnetPlan_prepare(plan, &magnet, part0);
 }
 
 #endif // XTRACK_EXIT_SLICE_RBEND_H

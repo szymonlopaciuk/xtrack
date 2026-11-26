@@ -17,6 +17,7 @@ import xtrack as xt
 
 from .general import _pkg_root
 from .internal_record import RecordIdentifier, RecordIndex, generate_get_record
+from .magnet_plans import MagnetPlan
 from .particles import Particles
 from .track_flags import c_header_flag_mapping
 
@@ -336,8 +337,9 @@ def _generate_per_particle_kernel_source(
 
 
 def _generate_beam_element_track_kernel_source(
-        element_name, scalar_kernel_name, tpsa_kernel_name):
+        element_name, scalar_kernel_name, tpsa_kernel_name, magnet_plan=False):
     return f'''\
+{'#define MAGNET_PLAN_KERNEL' if magnet_plan else ''}
 #define ELEMENT_NAME {element_name}
 
 #ifndef XTRACK_TPSA_TRACK
@@ -350,6 +352,7 @@ def _generate_beam_element_track_kernel_source(
 
 #undef KERNEL_NAME
 #undef ELEMENT_NAME
+#undef MAGNET_PLAN_KERNEL
 '''
 
 
@@ -482,6 +485,10 @@ class MetaBeamElement(xo.MetaHybridClass):
 
         track_kernel_name = None
         track_kernel_name_tpsa = None
+        prepare_plan_kernel_name = None
+        magnet_plan = data.get('_magnet_plan', False)
+        if magnet_plan:
+            depends_on.append(MagnetPlan)
         if ('allow_track' not in data.keys() or data['allow_track']):
             extra_c_source.append(
                 _generate_track_local_particle_with_transformations(
@@ -494,7 +501,7 @@ class MetaBeamElement(xo.MetaHybridClass):
                         '_ThinSliceElementBase' in (base.__name__ for base in bases)),
                     # Magnets: a class with `_magnet_plan = True` is tracked
                     # through a MagnetPlan (magnet_plans.py)
-                    magnet_plan=data.get('_magnet_plan', False),
+                    magnet_plan=magnet_plan,
                 )
             )
 
@@ -505,14 +512,28 @@ class MetaBeamElement(xo.MetaHybridClass):
                     element_name=name,
                     scalar_kernel_name=track_kernel_name,
                     tpsa_kernel_name=track_kernel_name_tpsa,
+                    magnet_plan=magnet_plan,
                 )
             )
 
-            # Define scalar track kernel.
+            # Define scalar track kernel. A magnet is tracked through its plan,
+            # prepared by a kernel of its own (track_local_particle_with_transformations.h)
+            plan_args = []
+            if magnet_plan:
+                plan_args = [xo.Arg(MagnetPlan, name='magnet_plan')]
+                prepare_plan_kernel_name = f'{name}_prepare_plan_kernel'
+                kernels[prepare_plan_kernel_name] = xo.Kernel(
+                    c_name=prepare_plan_kernel_name,
+                    args=[xo.Arg(xo.ThisClass, name='el'),
+                        xo.Arg(MagnetPlan, name='plan'),
+                        xo.Arg(xo.Int8, pointer=True, name="io_buffer")],
+                    n_threads=1,
+                )
             kernels[track_kernel_name] = xo.Kernel(
                 c_name=track_kernel_name,
                 args=[xo.Arg(xo.ThisClass, name='el'),
                     xo.Arg(Particles._XoStruct, name='particles'),
+                    *plan_args,
                     xo.Arg(xo.Int64, name='flag_increment_at_element'),
                     xo.Arg(xo.Int8, pointer=True, name="io_buffer")]
             )
@@ -550,6 +571,7 @@ class MetaBeamElement(xo.MetaHybridClass):
         # Attach some information to the class
         new_class._track_kernel_name = track_kernel_name
         new_class._track_kernel_name_tpsa = track_kernel_name_tpsa
+        new_class._prepare_plan_kernel_name = prepare_plan_kernel_name
         if '_internal_record_class' in data.keys():
             new_class._XoStruct._internal_record_class = data['_internal_record_class']
             new_class._internal_record_class = data['_internal_record_class']
@@ -782,10 +804,20 @@ class BeamElement(xo.HybridClass, metaclass=MetaBeamElement):
         else:
             io_buffer_arr = context.zeros(1, dtype=np.int8)  # dummy
 
+        plan_kwargs = {}
+        if self._prepare_plan_kernel_name is not None:
+            # A magnet: prepare its plan, then track the particles through it
+            plan = self.__dict__.get('_track_magnet_plan')
+            if plan is None:
+                plan = self.__dict__['_track_magnet_plan'] = MagnetPlan(_context=context)
+            context.kernels[self._prepare_plan_kernel_name](
+                el=self._xobject, plan=plan, io_buffer=io_buffer_arr)
+            plan_kwargs['magnet_plan'] = plan
+
         _track_kernel.description.n_threads = particles._capacity
         _track_kernel(el=self._xobject, particles=particles,
                       flag_increment_at_element=increment_at_element,
-                      io_buffer=io_buffer_arr)
+                      io_buffer=io_buffer_arr, **plan_kwargs)
 
     @property
     def context(self):

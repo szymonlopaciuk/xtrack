@@ -20,12 +20,12 @@
 GPUFUN
 void ThinSliceOctupoleExit_prepare_magnet(
         ThinSliceOctupoleExitData el,
-        MagnetPlan* plan,
+        MagnetPlan plan,
         LocalParticle* part0
 ) {
 
-    MagnetFace entry_face = MagnetFace_empty(0);
-    MagnetFace exit_face = MagnetFace_empty(1);
+    MagnetFace entry_face = MagnetPlan_new_face(plan, 0, part0);
+    MagnetFace exit_face = MagnetPlan_new_face(plan, 1, part0);
     EDGE_LOAD_STRAIGHT(exit_face, ThinSliceOctupoleExitData_get__parent_, el, exit);
 
     // Settings aligned by hand: not formatted
@@ -52,7 +52,7 @@ void ThinSliceOctupoleExit_prepare_magnet(
     //     y0_solenoid, rbend_model, rbend_compensate_sagitta, rbend_shift,
     //     rbend_angle_diff, length_straight
     // clang-format on
-    MagnetPlan_prepare(plan, &magnet, &entry_face, &exit_face, part0);
+    MagnetPlan_prepare(plan, &magnet, part0);
 }
 
 #endif // XTRACK_EXIT_SLICE_OCTUPOLE_H

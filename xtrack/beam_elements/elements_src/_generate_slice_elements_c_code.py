@@ -212,8 +212,8 @@ for td in to_do:
 
         out_lines = out_content.splitlines()
 
-        # Disable the faces a slice does not have: their MagnetFace keeps
-        # MagnetFace_empty, so the face does nothing. Each face is loaded on
+        # Disable the faces a slice does not have: their MagnetFace stays as
+        # reset (MagnetPlan_new_face), so the face does nothing. Each face is loaded on
         # one line (EDGE_LOAD_..., possibly after an if)
         removed_faces = [face for face, slice_type in (('entry', 'entry_slice'), ('exit', 'exit_slice'))
                          if generating != slice_type]

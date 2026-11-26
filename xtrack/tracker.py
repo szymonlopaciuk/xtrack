@@ -833,11 +833,9 @@ class Tracker:
         # TPSA tracking prepares each magnet in one plan, made once per call
         src_lines.append(
             '#define XT_TPSA_PLAN_DECL '
-            + ('MagnetPlan magnet_plan_tpsa;' if magnet_classes else '')
+            + ('MagnetPlanTpsaStorage magnet_plan_tpsa;' if magnet_classes else '')
         )
-        src_lines.append(_mp.plan_source(
-            magnet_classes,
-            check_layout=config.get('XTRACK_CHECK_MAGNET_PLAN_LAYOUT', False)))
+        src_lines.append(_mp.plan_source(magnet_classes))
         src_lines.append(
             r"""
             /*gpukern*/
@@ -865,7 +863,7 @@ class Tracker:
                              uint64_t track_flags
 #ifndef XTRACK_TPSA_TRACK
                              ,
-                /*gpuglmem*/ int8_t* magnet_plans,
+                             ArrNMagnetPlan magnet_plans,
                 /*gpuglmem*/ int64_t* magnet_plan_slots
 #endif
                              ){
@@ -2025,7 +2023,7 @@ class Tracker:
 
     def get_magnet_plan(self, name, backtrack=False):
         """Return the plan of a magnet, as ``track`` prepares it, as a nested
-        dict (see ``magnet_plans.PLAN_DTYPE`` for the fields).
+        dict (see ``magnet_plans.MagnetPlan`` for the fields).
 
         The plan is prepared from the current values of the attributes of the
         element, for backward tracking if ``backtrack``. Pointers are given as
@@ -2050,7 +2048,7 @@ class Tracker:
         self._magnet_plans.prepare(track_kernel, tracker_data,
                                    self.io_buffer.buffer, track_flags,
                                    idx, idx + 1)
-        return _mp.plan_to_dict(self._magnet_plans.read(self._context, idx))
+        return self._magnet_plans.read(self._context, idx)._to_dict()
 
     def get_track_kernel_and_data_for_present_config(self):
 

@@ -651,26 +651,6 @@ void track_magnet_drift_single_particle(
 
 
 
-GPUFUN XT_INLINE
-void MagnetDrift_apply(
-    LocalParticle* part,
-    const MagnetDrift* drift,
-    double length,
-    double taper  // factor of the strengths (tapering, 1 otherwise)
-) {
-    track_magnet_drift_single_particle(
-        part,
-        length,
-        taper * drift->k0,
-        taper * drift->k1,
-        drift->ks,
-        drift->h,
-        drift->x0_solenoid,
-        drift->y0_solenoid,
-        drift->model
-    );
-}
-
 #undef IS_ZERO
 
 #endif

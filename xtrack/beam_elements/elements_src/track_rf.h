@@ -324,7 +324,7 @@ void track_rf_particles(
         // Only the drift model is used: no field
         const int8_t drift_model = configure_tracking_model(
             model, /*k0*/ 0., /*k1*/ 0., /*h*/ 0., /*ks*/ 0.
-        ).drift.model;
+        ).drift_model;
 
 
         START_PER_PARTICLE_BLOCK(part0, part);

@@ -86,13 +86,87 @@ void magnet_total_multipoles(
 #endif
 
 
+// The radiation record of a body (held by address in the plan)
+GPUFUN XT_INLINE
+MagnetRadiationRecord MagnetBody_radiation_record(const MagnetBody body) {
+    return (MagnetRadiationRecord)(size_t)MagnetBody_get_radiation_record(body);
+}
+
+
+// Apply the drift of a body over dlength, with taper the factor of the
+// strengths (tapering, 1 otherwise)
+GPUFUN XT_INLINE
+void MagnetDrift_apply(
+    LocalParticle* part,
+    const MagnetDrift drift,
+    double length,
+    double taper
+) {
+    track_magnet_drift_single_particle(
+        part,
+        length,
+        taper * XT_FT(MagnetDrift_getp_k0(drift)),
+        taper * XT_FT(MagnetDrift_getp_k1(drift)),
+        XT_FT(MagnetDrift_getp_ks(drift)),
+        MagnetDrift_get_h(drift),
+        MagnetDrift_get_x0_solenoid(drift),
+        MagnetDrift_get_y0_solenoid(drift),
+        MagnetDrift_get_model(drift)
+    );
+}
+
+
+// Apply a prepared kick, with kick_weight the fraction of the body it covers
+// and taper the factor of the strengths (tapering, 1 otherwise); its
+// multipoles are those of the field
+GPUFUN XT_INLINE
+void MagnetKick_apply(
+    LocalParticle* part,
+    const MagnetKick kick,
+    const MagnetField field,
+    double kick_weight,
+    double taper
+) {
+    track_magnet_kick_single_particle(
+        part,
+        kick_weight,
+        taper,
+        MagnetKick_get_length(kick),
+        MagnetKick_get_order(kick),
+        MagnetKick_get_inv_factorial_order(kick),
+        MagnetField_knl(field),
+        MagnetField_ksl(field),
+        MagnetKick_get_factor_knl_ksl(kick),
+        XT_FT(MagnetKick_getp1_knl_main(kick, 0)),
+        XT_FT(MagnetKick_getp1_knl_main(kick, 1)),
+        XT_FT(MagnetKick_getp1_knl_main(kick, 2)),
+        XT_FT(MagnetKick_getp1_knl_main(kick, 3)),
+        XT_FT(MagnetKick_getp1_ksl_main(kick, 0)),
+        XT_FT(MagnetKick_getp1_ksl_main(kick, 1)),
+        XT_FT(MagnetKick_getp1_ksl_main(kick, 2)),
+        XT_FT(MagnetKick_getp1_ksl_main(kick, 3)),
+        MagnetKick_get_h(kick),
+        MagnetKick_get_hxl(kick),
+        MagnetKick_get_htot(kick),
+        XT_FT(MagnetKick_getp_k0_h_coeff(kick)),
+        XT_FT(MagnetKick_getp_k1_h_coeff(kick)),
+        MagnetKick_get_rot_frame(kick),
+        MagnetKick_get_do_drift_correction(kick),
+        MagnetKick_get_is_empty(kick),
+        MagnetKick_get_has_main(kick),
+        MagnetKick_get_has_curvature(kick)
+    );
+}
+
+
 #if !defined(XTRACK_TPSA_TRACK) && !defined(XTRACK_MULTIPOLE_NO_SYNRAD)
 // Spin and radiation over a step of length ll of the body, from the
 // coordinates before it (old_*) and after it (the particle).
 GPUFUN XT_NOINLINE
 void magnet_body_spin_radiation(
     LocalParticle* part,
-    const MagnetBody* body,
+    const MagnetBody body,
+    const MagnetField field,
     double const taper,
     double const ll,
     double const old_x,
@@ -104,17 +178,7 @@ void magnet_body_spin_radiation(
     double* dpx_record_exit,
     double* dpy_record_exit
 ) {
-    const MagnetField* field = body->field;
-    double const length = body->length;
-    double const inv_factorial_order = body->inv_factorial_order;
-    double const factor_knl_ksl = body->factor_knl_ksl;
-    double const ks = body->drift.ks;
-    double const dks_ds = body->dks_ds;
-    double const x0_solenoid = body->drift.x0_solenoid;
-    double const y0_solenoid = body->drift.y0_solenoid;
-    double const h_radiation = body->h_radiation;
-    int64_t const radiation_flag = body->radiation_flag;
-    MagnetRadiationRecord radiation_record = body->radiation_record;
+    const MagnetDrift drift = MagnetBody_getp_drift(body);
     double Bx_T, By_T, Bz_T;
     double const new_kin_px = LocalParticle_get_px(part) - LocalParticle_get_ax(part);
     double const new_kin_py = LocalParticle_get_py(part) - LocalParticle_get_ay(part);
@@ -125,37 +189,38 @@ void magnet_body_spin_radiation(
         LocalParticle_get_q0(part),
         0.5 * (old_x + LocalParticle_get_x(part)),
         0.5 * (old_y + LocalParticle_get_y(part)),
-        length,
-        field->kl_order,
-        inv_factorial_order,
-        field->knl,
-        field->ksl,
-        taper * factor_knl_ksl,
-        taper * field->knorm[0],
-        taper * field->knorm[1],
-        taper * field->knorm[2],
-        taper * field->knorm[3],
-        taper * field->kskew[0],
-        taper * field->kskew[1],
-        taper * field->kskew[2],
-        taper * field->kskew[3],
-        ks,
-        dks_ds,
-        x0_solenoid,
-        y0_solenoid,
+        MagnetBody_get_length(body),
+        MagnetField_get_kl_order(field),
+        MagnetBody_get_inv_factorial_order(body),
+        MagnetField_knl(field),
+        MagnetField_ksl(field),
+        taper * MagnetBody_get_factor_knl_ksl(body),
+        taper * XT_FT(MagnetField_getp1_knorm(field, 0)),
+        taper * XT_FT(MagnetField_getp1_knorm(field, 1)),
+        taper * XT_FT(MagnetField_getp1_knorm(field, 2)),
+        taper * XT_FT(MagnetField_getp1_knorm(field, 3)),
+        taper * XT_FT(MagnetField_getp1_kskew(field, 0)),
+        taper * XT_FT(MagnetField_getp1_kskew(field, 1)),
+        taper * XT_FT(MagnetField_getp1_kskew(field, 2)),
+        taper * XT_FT(MagnetField_getp1_kskew(field, 3)),
+        XT_FT(MagnetDrift_getp_ks(drift)),
+        MagnetBody_get_dks_ds(body),
+        MagnetDrift_get_x0_solenoid(drift),
+        MagnetDrift_get_y0_solenoid(drift),
         &Bx_T,
         &By_T,
         &Bz_T
     );
     double const dzeta = LocalParticle_get_zeta(part) - old_zeta;
     double const l_path = LocalParticle_get_rvv(part) * (ll - dzeta);
-    magnet_spin(part, Bx_T, By_T, Bz_T, h_radiation, ll, l_path);
+    magnet_spin(part, Bx_T, By_T, Bz_T, MagnetBody_get_h_radiation(body), ll, l_path);
+    int64_t const radiation_flag = MagnetBody_get_radiation_flag(body);
     if (radiation_flag) {
         double const B_perp_T = compute_b_perp_mod(
             mean_kin_px, mean_kin_py, LocalParticle_get_delta(part), Bx_T, By_T, Bz_T
         );
         magnet_radiation(
-            part, B_perp_T, ll, l_path, radiation_flag, radiation_record,
+            part, B_perp_T, ll, l_path, radiation_flag, MagnetBody_radiation_record(body),
             dp_record_exit, dpx_record_exit, dpy_record_exit
         );
     }
@@ -166,21 +231,23 @@ void magnet_body_spin_radiation(
 GPUFUN XT_INLINE
 void track_magnet_body_single_particle(
     LocalParticle* part,
-    const MagnetBody* body,
+    const MagnetBody body,
+    const MagnetField field,
     double taper,  // factor of the strengths (tapering, 1 otherwise)
     double* dp_record_exit,
     double* dpx_record_exit,
     double* dpy_record_exit
 ) {
-    const double length = body->length;
+    const double length = MagnetBody_get_length(body);
 
 // The maps for RUN_INTEGRATOR
-#define MAGNET_KICK(part, weight)                              \
-    do {                                                       \
-        if (!body->kick_is_noop)                               \
-            MagnetKick_apply(part, &body->kick, (weight), taper); \
+#define MAGNET_KICK(part, weight)                                              \
+    do {                                                                       \
+        if (!MagnetBody_get_kick_is_noop(body))                                \
+            MagnetKick_apply(part, MagnetBody_getp_kick(body), field, (weight), taper); \
     } while (0)
-#define MAGNET_DRIFT(part, dlength) MagnetDrift_apply(part, &body->drift, (dlength), taper)
+#define MAGNET_DRIFT(part, dlength) \
+    MagnetDrift_apply(part, MagnetBody_getp_drift(body), (dlength), taper)
 
 #if defined(XTRACK_TPSA_TRACK) || defined(XTRACK_MULTIPOLE_NO_SYNRAD)
     #define WITH_RADIATION(ll, code) \
@@ -200,14 +267,14 @@ void track_magnet_body_single_particle(
             code; \
             if (length > 0) { /* spin always, radiation if radiation_flag */ \
                 magnet_body_spin_radiation( \
-                    part, body, taper, (ll), old_x, old_y, old_zeta, old_kin_px, old_kin_py, \
-                    dp_record_exit, dpx_record_exit, dpy_record_exit \
+                    part, body, field, taper, (ll), old_x, old_y, old_zeta, old_kin_px, \
+                    old_kin_py, dp_record_exit, dpx_record_exit, dpy_record_exit \
                 ); \
             } \
         }
     #endif
 
-    if (body->drift_only) {
+    if (MagnetBody_get_drift_only(body)) {
         WITH_RADIATION(length,
             MAGNET_DRIFT(part, length);
         )
@@ -215,7 +282,7 @@ void track_magnet_body_single_particle(
     else{
 
         RUN_INTEGRATOR(
-            body->integrator, length, body->num_kicks, part,
+            MagnetBody_get_integrator(body), length, MagnetBody_get_num_kicks(body), part,
             MAGNET_DRIFT, MAGNET_KICK, WITH_RADIATION
         );
 
@@ -242,8 +309,8 @@ void rbend_straight_body_patches(
     const double angle_diff,
     const double rbend_shift,
     const int64_t compensate_sagitta,
-    MagnetFace* entry_face,
-    MagnetFace* exit_face
+    MagnetFace entry_face,
+    MagnetFace exit_face
 ) {
     const double theta_entry = (angle - angle_diff) / 2.0;
     const double theta_exit = (angle + angle_diff) / 2.0;
@@ -280,14 +347,14 @@ void rbend_straight_body_patches(
             term_exit_over_h * (px0_mid + sin_theta_exit) / (cos_theta_exit + sqrt_mid);
     }
 
-    entry_face->angle_fdown += theta_entry;
-    exit_face->angle_fdown += theta_exit;
-    entry_face->has_patch = 1;
-    entry_face->patch_angle = theta_entry;
-    entry_face->patch_dx = dx_entry;
-    exit_face->has_patch = 1;
-    exit_face->patch_angle = theta_exit;
-    exit_face->patch_dx = dx_exit;
+    MagnetFace_set_angle_fdown(entry_face, MagnetFace_get_angle_fdown(entry_face) + theta_entry);
+    MagnetFace_set_angle_fdown(exit_face, MagnetFace_get_angle_fdown(exit_face) + theta_exit);
+    MagnetFace_set_has_patch(entry_face, 1);
+    MagnetFace_set_patch_angle(entry_face, theta_entry);
+    MagnetFace_set_patch_dx(entry_face, dx_entry);
+    MagnetFace_set_has_patch(exit_face, 1);
+    MagnetFace_set_patch_angle(exit_face, theta_exit);
+    MagnetFace_set_patch_dx(exit_face, dx_exit);
 }
 
 
@@ -296,8 +363,8 @@ void rbend_straight_body_patches(
 // tracking model
 GPUFUN
 void MagnetKick_prepare(
-    MagnetKick* kick,
-    const MagnetField* field,
+    MagnetKick kick,
+    const MagnetField field,
     const MagnetSplit* split,
     double length,
     double inv_factorial_order,
@@ -305,30 +372,30 @@ void MagnetKick_prepare(
     double hxl,
     uint8_t is_empty
 ) {
-    const int64_t order = field->kl_order;
-    const xt_float_or_tpsa* knl = field->knl;
+    const int64_t order = MagnetField_get_kl_order(field);
+    const xt_float_or_tpsa* knl = MagnetField_knl(field);
 
-    kick->length = length;
-    kick->order = order;
-    kick->inv_factorial_order = inv_factorial_order;
-    kick->knl = knl;
-    kick->ksl = field->ksl;
-    kick->factor_knl_ksl = factor_knl_ksl;
+    MagnetKick_set_length(kick, length);
+    MagnetKick_set_order(kick, order);
+    MagnetKick_set_inv_factorial_order(kick, inv_factorial_order);
+    MagnetKick_set_factor_knl_ksl(kick, factor_knl_ksl);
     // The kick part of k0, k1 (configure_tracking_model) and the other
     // strengths, times the length
-    kick->knl_main[0] = split->k0_kick * length;
-    kick->knl_main[1] = split->k1_kick * length;
-    kick->knl_main[2] = field->knorm[2] * length;
-    kick->knl_main[3] = field->knorm[3] * length;
+    XT_FT(MagnetKick_getp1_knl_main(kick, 0)) = split->k0_kick * length;
+    XT_FT(MagnetKick_getp1_knl_main(kick, 1)) = split->k1_kick * length;
+    XT_FT(MagnetKick_getp1_knl_main(kick, 2)) = XT_FT(MagnetField_getp1_knorm(field, 2)) * length;
+    XT_FT(MagnetKick_getp1_knl_main(kick, 3)) = XT_FT(MagnetField_getp1_knorm(field, 3)) * length;
     for (int ii = 0; ii <= 3; ii++) {
-        kick->ksl_main[ii] = field->kskew[ii] * length;
+        XT_FT(MagnetKick_getp1_ksl_main(kick, ii)) = XT_FT(MagnetField_getp1_kskew(field, ii)) * length;
     }
-    kick->h = split->h_kick;
-    kick->hxl = hxl;
-    kick->htot = split->h_kick;
+    const double h = split->h_kick;
+    double htot = h;
     if (length != 0) {
-        kick->htot += hxl / length;
+        htot += hxl / length;
     }
+    MagnetKick_set_h(kick, h);
+    MagnetKick_set_hxl(kick, hxl);
+    MagnetKick_set_htot(kick, htot);
     // k0h correction can be computed from this term in the hamiltonian
     // H = 1/2 h k0 x^2
     // (see MAD 8 physics manual, eq. 5.15, and apply Hamilton's eq. dp/ds = -dH/dx)
@@ -336,7 +403,7 @@ void MagnetKick_prepare(
     if (order >= 0) {
         k0l_mult = knl[0] * factor_knl_ksl;
     }
-    kick->k0_h_coeff = split->k0_h_correction * length + k0l_mult;
+    XT_FT(MagnetKick_getp_k0_h_coeff(kick)) = split->k0_h_correction * length + k0l_mult;
     // k1h correction can be computed from this term in the hamiltonian
     // H = 1/3 hk1 x^3 - 1/2 hk1 xy^2
     // (see MAD 8 physics manual, eq. 5.15, and apply Hamilton's eq. dp/ds = -dH/dx)
@@ -344,16 +411,17 @@ void MagnetKick_prepare(
     if (order >= 1) {
         k1l_mult = knl[1] * factor_knl_ksl;
     }
-    kick->k1_h_coeff = split->k1_h_correction * length + k1l_mult;
-    kick->rot_frame = split->kick_rot_frame;
-    kick->do_drift_correction = split->do_drift_correction;
-    kick->is_empty = is_empty;
-    kick->has_main = 0;
+    XT_FT(MagnetKick_getp_k1_h_coeff(kick)) = split->k1_h_correction * length + k1l_mult;
+    MagnetKick_set_rot_frame(kick, split->kick_rot_frame);
+    MagnetKick_set_do_drift_correction(kick, split->do_drift_correction);
+    MagnetKick_set_is_empty(kick, is_empty);
+    uint8_t has_main = 0;
     for (int ii = 0; ii <= 3; ii++) {
-        kick->has_main |= !xt_float_or_tpsa_is_zero(kick->knl_main[ii])
-                          || !xt_float_or_tpsa_is_zero(kick->ksl_main[ii]);
+        has_main |= !xt_float_or_tpsa_is_zero(XT_FT(MagnetKick_getp1_knl_main(kick, ii)))
+                    || !xt_float_or_tpsa_is_zero(XT_FT(MagnetKick_getp1_ksl_main(kick, ii)));
     }
-    kick->has_curvature = kick->h != 0 || kick->hxl != 0;
+    MagnetKick_set_has_main(kick, has_main);
+    MagnetKick_set_has_curvature(kick, h != 0 || hxl != 0);
 }
 
 
@@ -362,8 +430,8 @@ void MagnetKick_prepare(
 // be prepared).
 GPUFUN XT_INLINE
 void MagnetBody_prepare(
-    MagnetBody* body,
-    const MagnetField* field,
+    MagnetBody body,
+    const MagnetField field,
     int8_t model,
     int8_t integrator,
     int64_t num_multipole_kicks,
@@ -371,21 +439,19 @@ void MagnetBody_prepare(
     double h,
     double hxl
 ) {
-    const double body_length = body->length;
-    const int64_t order = field->kl_order;
-    const xt_float_or_tpsa* knl = field->knl;
-    const xt_float_or_tpsa* ksl = field->ksl;
-    xt_float_or_tpsa_arg k0 = field->knorm[0];
-    xt_float_or_tpsa_arg k1 = field->knorm[1];
-    xt_float_or_tpsa_arg k2 = field->knorm[2];
-    xt_float_or_tpsa_arg k3 = field->knorm[3];
-    xt_float_or_tpsa_arg k0s = field->kskew[0];
-    xt_float_or_tpsa_arg k1s = field->kskew[1];
-    xt_float_or_tpsa_arg k2s = field->kskew[2];
-    xt_float_or_tpsa_arg k3s = field->kskew[3];
-    xt_float_or_tpsa_arg ks = field->ks;
-
-    body->field = field;
+    const double body_length = MagnetBody_get_length(body);
+    const int64_t order = MagnetField_get_kl_order(field);
+    const xt_float_or_tpsa* knl = MagnetField_knl(field);
+    const xt_float_or_tpsa* ksl = MagnetField_ksl(field);
+    xt_float_or_tpsa_arg k0 = XT_FT(MagnetField_getp1_knorm(field, 0));
+    xt_float_or_tpsa_arg k1 = XT_FT(MagnetField_getp1_knorm(field, 1));
+    xt_float_or_tpsa_arg k2 = XT_FT(MagnetField_getp1_knorm(field, 2));
+    xt_float_or_tpsa_arg k3 = XT_FT(MagnetField_getp1_knorm(field, 3));
+    xt_float_or_tpsa_arg k0s = XT_FT(MagnetField_getp1_kskew(field, 0));
+    xt_float_or_tpsa_arg k1s = XT_FT(MagnetField_getp1_kskew(field, 1));
+    xt_float_or_tpsa_arg k2s = XT_FT(MagnetField_getp1_kskew(field, 2));
+    xt_float_or_tpsa_arg k3s = XT_FT(MagnetField_getp1_kskew(field, 3));
+    xt_float_or_tpsa_arg ks = XT_FT(MagnetField_getp_ks(field));
 
     if (model == MODEL_KICK_ONLY) {
         integrator = INTEGRATOR_UNIFORM;
@@ -398,9 +464,14 @@ void MagnetBody_prepare(
     }
 
     const MagnetSplit split = configure_tracking_model(model, k0, k1, h, ks);
-    body->drift = split.drift;
-    body->drift.x0_solenoid = field->x0_solenoid;
-    body->drift.y0_solenoid = field->y0_solenoid;
+    const MagnetDrift drift = MagnetBody_getp_drift(body);
+    MagnetDrift_set_model(drift, split.drift_model);
+    XT_FT(MagnetDrift_getp_k0(drift)) = split.drift_k0;
+    XT_FT(MagnetDrift_getp_k1(drift)) = split.drift_k1;
+    XT_FT(MagnetDrift_getp_ks(drift)) = split.drift_ks;
+    MagnetDrift_set_h(drift, split.drift_h);
+    MagnetDrift_set_x0_solenoid(drift, MagnetField_get_x0_solenoid(field));
+    MagnetDrift_set_y0_solenoid(drift, MagnetField_get_y0_solenoid(field));
 
     // Compute the number of kicks for auto mode
     if (num_multipole_kicks == 0) {  // num_multipole_kicks = 0 means auto mode
@@ -441,32 +512,36 @@ void MagnetBody_prepare(
                               split.h_kick
                           );
 
-    body->integrator = integrator;
-    body->num_kicks = num_multipole_kicks;
+    MagnetBody_set_integrator(body, integrator);
+    MagnetBody_set_num_kicks(body, num_multipole_kicks);
 
     // Curvature for the radiation (only for length > 0)
-    if (fabs(split.drift.h) > 0) {
-        body->h_radiation = split.drift.h;
+    if (fabs(split.drift_h) > 0) {
+        MagnetBody_set_h_radiation(body, split.drift_h);
     }
     else {
-        body->h_radiation = body_length > 0 ? split.h_kick + hxl / body_length : 0.;
+        MagnetBody_set_h_radiation(
+            body, body_length > 0 ? split.h_kick + hxl / body_length : 0.
+        );
     }
 
-    body->drift_only = num_multipole_kicks == 0
-                       && xt_float_or_tpsa_const_part(split.k0_kick) == 0
-                       && xt_float_or_tpsa_const_part(split.k1_kick) == 0
-                       && split.h_kick == 0;
+    const uint8_t drift_only = num_multipole_kicks == 0
+                               && xt_float_or_tpsa_const_part(split.k0_kick) == 0
+                               && xt_float_or_tpsa_const_part(split.k1_kick) == 0
+                               && split.h_kick == 0;
     // An empty kick still applies the path correction of mat-kick-mat-exact
-    body->kick_is_noop = kick_is_empty && !split.do_drift_correction;
-    if (body->drift_only || body->kick_is_noop) return;
+    const uint8_t kick_is_noop = kick_is_empty && !split.do_drift_correction;
+    MagnetBody_set_drift_only(body, drift_only);
+    MagnetBody_set_kick_is_noop(body, kick_is_noop);
+    if (drift_only || kick_is_noop) return;
 
     MagnetKick_prepare(
-        &body->kick,
+        MagnetBody_getp_kick(body),
         field,
         &split,
         body_length,
-        body->inv_factorial_order,
-        body->factor_knl_ksl,
+        MagnetBody_get_inv_factorial_order(body),
+        MagnetBody_get_factor_knl_ksl(body),
         hxl,
         kick_is_empty
     );
@@ -522,6 +597,7 @@ void MagnetSettings_init_default(MagnetSettings* s) {
     s->k1s = 0.;
     s->k2s = 0.;
     s->k3s = 0.;
+    s->k_order = MAGNET_K_ORDER;
     s->ks = 0.;
     s->dks_ds = 0.;
     s->x0_solenoid = 0.;
@@ -535,19 +611,36 @@ void MagnetSettings_init_default(MagnetSettings* s) {
 }
 
 
+// A face of the element (is_exit_face) in the plan: the entry face is crossed
+// first when tracking forward, last when backtracking
+GPUFUN XT_INLINE
+MagnetFace MagnetPlan_face(MagnetPlan plan, const uint8_t is_exit_face, const uint8_t backtrack) {
+    return (is_exit_face == backtrack) ? MagnetPlan_getp_first_face(plan)
+                                       : MagnetPlan_getp_second_face(plan);
+}
+
+// A face of the element, reset, for the element to set before MagnetPlan_prepare
+GPUFUN XT_INLINE
+MagnetFace MagnetPlan_new_face(MagnetPlan plan, const uint8_t is_exit_face, LocalParticle* part0) {
+    const MagnetFace face = MagnetPlan_face(
+        plan, is_exit_face, LocalParticle_check_track_flag(part0, XS_FLAG_BACKTRACK)
+    );
+    MagnetFace_reset(face, is_exit_face);
+    return face;
+}
+
+
 // Prepare a magnet, or a slice of it (weight: its fraction of the length),
 // for track_magnet_particles: its first face, its body and its second face, in
-// the order of the direction of travel. The faces are given in the element
-// frame. The misalignment is set by the caller (X_prepare_plan). Reads only
-// the track flags of part0.
+// the order of the direction of travel. The settings of the faces, in the
+// element frame, are already in the plan (MagnetPlan_new_face). The misalignment is set by the caller
+// (X_prepare_plan). Reads only the track flags of part0.
 // Runs once per element (prepare_magnet_plans), not per particle: not
 // inlined, so the kernel holds one copy, not one per magnet class.
 GPUFUN XT_NOINLINE
 void MagnetPlan_prepare(
-    MagnetPlan* plan,
+    MagnetPlan plan,
     const MagnetSettings* settings,
-    const MagnetFace* entry_face_in,
-    const MagnetFace* exit_face_in,
     LocalParticle* part0
 ) {
     // Values changed below (RBend, backtracking, tapering) are local copies;
@@ -561,28 +654,28 @@ void MagnetPlan_prepare(
 
     const uint8_t backtrack = LocalParticle_check_track_flag(part0, XS_FLAG_BACKTRACK);
 
-    plan->transform.active = 0;
-    plan->is_thick = 0;
+    MagnetTransform_set_active(MagnetPlan_getp_transform(plan), 0);
+    MagnetPlan_set_is_thick(plan, 0);
 
     // Field of the body and the faces (the multipoles are added below)
-    MagnetField* field = &plan->field;
-    field->knorm[0] = settings->k0;
-    field->knorm[1] = settings->k1;
-    field->knorm[2] = settings->k2;
-    field->knorm[3] = settings->k3;
-    field->kskew[0] = settings->k0s;
-    field->kskew[1] = settings->k1s;
-    field->kskew[2] = settings->k2s;
-    field->kskew[3] = settings->k3s;
-    field->k_order = MAGNET_K_ORDER;
-    field->ks = settings->ks;
-    field->x0_solenoid = settings->x0_solenoid;
-    field->y0_solenoid = settings->y0_solenoid;
+    const MagnetField field = MagnetPlan_getp_field(plan);
+    XT_FT(MagnetField_getp1_knorm(field, 0)) = settings->k0;
+    XT_FT(MagnetField_getp1_knorm(field, 1)) = settings->k1;
+    XT_FT(MagnetField_getp1_knorm(field, 2)) = settings->k2;
+    XT_FT(MagnetField_getp1_knorm(field, 3)) = settings->k3;
+    XT_FT(MagnetField_getp1_kskew(field, 0)) = settings->k0s;
+    XT_FT(MagnetField_getp1_kskew(field, 1)) = settings->k1s;
+    XT_FT(MagnetField_getp1_kskew(field, 2)) = settings->k2s;
+    XT_FT(MagnetField_getp1_kskew(field, 3)) = settings->k3s;
+    MagnetField_set_k_order(field, settings->k_order);
+    XT_FT(MagnetField_getp_ks(field)) = settings->ks;
+    MagnetField_set_x0_solenoid(field, settings->x0_solenoid);
+    MagnetField_set_y0_solenoid(field, settings->y0_solenoid);
 
     // Faces, in the element frame; the RBend changes their angles or adds
     // patches
-    MagnetFace entry_face = *entry_face_in;
-    MagnetFace exit_face = *exit_face_in;
+    const MagnetFace entry_face = MagnetPlan_face(plan, 0, backtrack);
+    const MagnetFace exit_face = MagnetPlan_face(plan, 1, backtrack);
 
     // RBend: the faces of a curved body are at the angle of the reference
     // orbit; a straight body follows the chord, and its length and the
@@ -590,8 +683,14 @@ void MagnetPlan_prepare(
     double length_curved = 0.;
     double const angle = h * length;
     if (rbend_model == RBEND_MODEL_CURVED_BODY){
-        entry_face.angle += (angle - settings->rbend_angle_diff) / 2.0;
-        exit_face.angle += (angle + settings->rbend_angle_diff) / 2.0;
+        MagnetFace_set_angle(
+            entry_face,
+            MagnetFace_get_angle(entry_face) + (angle - settings->rbend_angle_diff) / 2.0
+        );
+        MagnetFace_set_angle(
+            exit_face,
+            MagnetFace_get_angle(exit_face) + (angle + settings->rbend_angle_diff) / 2.0
+        );
     }
     else if (rbend_model == RBEND_MODEL_STRAIGHT_BODY){
         rbend_straight_body_patches(
@@ -601,8 +700,8 @@ void MagnetPlan_prepare(
             settings->rbend_angle_diff,
             settings->rbend_shift,
             settings->rbend_compensate_sagitta,
-            &entry_face,
-            &exit_face
+            entry_face,
+            exit_face
         );
         length_curved = length;
         length = settings->length_straight;
@@ -628,13 +727,13 @@ void MagnetPlan_prepare(
     // strengths of the plan. While compensating the radiation energy loss the
     // plan holds the nominal strengths and the factor comes from the particle
     // (magnet_taper_factor)
-    plan->taper = 1.;
-    plan->taper_from_delta = 0;
+    MagnetPlan_set_taper(plan, 1.);
+    MagnetPlan_set_taper_from_delta(plan, 0);
     double taper_const = 1.;
 #if !defined(XTRACK_TPSA_TRACK) && !defined(XTRACK_MULTIPOLE_NO_SYNRAD)
     if (radiation_flag) {
         if (LocalParticle_check_track_flag(part0, XS_FLAG_SR_TAPER)) {
-            plan->taper_from_delta = 1;
+            MagnetPlan_set_taper_from_delta(plan, 1);
         }
         else {
             taper_const = 1. + settings->delta_taper;
@@ -643,8 +742,8 @@ void MagnetPlan_prepare(
 #endif
     if (taper_const != 1.) {
         for (int ii = 0; ii <= MAGNET_K_ORDER; ii++) {
-            field->knorm[ii] = taper_const * field->knorm[ii];
-            field->kskew[ii] = taper_const * field->kskew[ii];
+            XT_FT(MagnetField_getp1_knorm(field, ii)) = taper_const * XT_FT(MagnetField_getp1_knorm(field, ii));
+            XT_FT(MagnetField_getp1_kskew(field, ii)) = taper_const * XT_FT(MagnetField_getp1_kskew(field, ii));
         }
         knl_scale_body *= taper_const;
     }
@@ -658,10 +757,7 @@ void MagnetPlan_prepare(
         inv_factorial_order_tot /= ii;
     }
 #ifdef XTRACK_TPSA_TRACK
-    // The TPSA type has no default constructor: lift zero-initialised storage
-    const double zeros[MAGNET_MAX_MULTIPOLE_ORDER + 1] = {0};
-    plan->knl_tot.lift(zeros, order_tot + 1);
-    plan->ksl_tot.lift(zeros, order_tot + 1);
+    // The multipoles are lifted to TPSAs, in the plan
     magnet_total_multipoles(
         settings->order,
         settings->knl,
@@ -671,15 +767,15 @@ void MagnetPlan_prepare(
         settings->ksl_rel,
         settings->rel_ref_strength,
         order_tot,
-        plan->knl_tot.mutable_ptr(),
-        plan->ksl_tot.mutable_ptr()
+        XT_FT_PTR(MagnetPlan_getp1_knl_tot(plan, 0)),
+        XT_FT_PTR(MagnetPlan_getp1_ksl_tot(plan, 0))
     );
-    field->knl = plan->knl_tot.ptr();
-    field->ksl = plan->ksl_tot.ptr();
+    MagnetField_set_knl(field, MAGNET_PLAN_ADDR(XT_FT_PTR(MagnetPlan_getp1_knl_tot(plan, 0))));
+    MagnetField_set_ksl(field, MAGNET_PLAN_ADDR(XT_FT_PTR(MagnetPlan_getp1_ksl_tot(plan, 0))));
 #else
     // Without a relative component the element's own arrays are used
-    field->knl = settings->knl;
-    field->ksl = settings->ksl;
+    MagnetField_set_knl(field, MAGNET_PLAN_ADDR(settings->knl));
+    MagnetField_set_ksl(field, MAGNET_PLAN_ADDR(settings->ksl));
     if (magnet_has_rel(settings->order_rel, settings->knl_rel, settings->ksl_rel)) {
         magnet_total_multipoles(
             settings->order,
@@ -690,42 +786,43 @@ void MagnetPlan_prepare(
             settings->ksl_rel,
             settings->rel_ref_strength,
             order_tot,
-            plan->knl_tot,
-            plan->ksl_tot
+            XT_FT_PTR(MagnetPlan_getp1_knl_tot(plan, 0)),
+            XT_FT_PTR(MagnetPlan_getp1_ksl_tot(plan, 0))
         );
-        field->knl = plan->knl_tot;
-        field->ksl = plan->ksl_tot;
+        MagnetField_set_knl(field, MAGNET_PLAN_ADDR(XT_FT_PTR(MagnetPlan_getp1_knl_tot(plan, 0))));
+        MagnetField_set_ksl(field, MAGNET_PLAN_ADDR(XT_FT_PTR(MagnetPlan_getp1_ksl_tot(plan, 0))));
     }
 #endif
-    field->kl_order = order_tot;
-    field->knl_scale = taper_const;
-    field->length = length;
+    MagnetField_set_kl_order(field, order_tot);
+    MagnetField_set_knl_scale(field, taper_const);
+    MagnetField_set_length(field, length);
 
     // Faces, in the order they are crossed: the particle enters the field at
     // the first and leaves it at the second, in both directions of travel
-    plan->first_face = backtrack ? exit_face : entry_face;
-    plan->second_face = backtrack ? entry_face : exit_face;
-    if (MagnetFace_uses_field(&entry_face) || MagnetFace_uses_field(&exit_face)) {
+    const MagnetFace first_face = MagnetPlan_getp_first_face(plan);
+    const MagnetFace second_face = MagnetPlan_getp_second_face(plan);
+    if (MagnetFace_uses_field(entry_face) || MagnetFace_uses_field(exit_face)) {
         MagnetField_prepare(field);
     }
-    MagnetFace_prepare(&plan->first_face, field, backtrack);
-    MagnetFace_prepare(&plan->second_face, field, backtrack);
+    MagnetFace_prepare(first_face, field, backtrack);
+    MagnetFace_prepare(second_face, field, backtrack);
     // A face that does nothing is skipped as a whole, not sub-map by sub-map
-    plan->first_active = plan->first_face.has_work;
-    plan->second_active = plan->second_face.has_work;
+    MagnetPlan_set_first_active(plan, MagnetFace_get_has_work(first_face));
+    MagnetPlan_set_second_active(plan, MagnetFace_get_has_work(second_face));
 
     // Faces only (edge slices)
-    plan->body_active = settings->body_active != 0;
-    if (!plan->body_active) return;
+    const uint8_t body_active = settings->body_active != 0;
+    MagnetPlan_set_body_active(plan, body_active);
+    if (!body_active) return;
 
     // Body
-    MagnetBody* body = &plan->body;
-    body->length = body_length;
-    body->inv_factorial_order = inv_factorial_order_tot;
-    body->factor_knl_ksl = knl_scale_body;
-    body->dks_ds = backtrack ? -settings->dks_ds : settings->dks_ds;
-    body->radiation_flag = radiation_flag;
-    body->radiation_record = settings->radiation_record;
+    const MagnetBody body = MagnetPlan_getp_body(plan);
+    MagnetBody_set_length(body, body_length);
+    MagnetBody_set_inv_factorial_order(body, inv_factorial_order_tot);
+    MagnetBody_set_factor_knl_ksl(body, knl_scale_body);
+    MagnetBody_set_dks_ds(body, backtrack ? -settings->dks_ds : settings->dks_ds);
+    MagnetBody_set_radiation_flag(body, radiation_flag);
+    MagnetBody_set_radiation_record(body, MAGNET_PLAN_ADDR(settings->radiation_record));
     MagnetBody_prepare(
         body,
         field,
@@ -739,9 +836,10 @@ void MagnetPlan_prepare(
 
     // Straight body: the path length is measured on the curved reference
     // (not for the kick only model)
-    plan->correct_s = rbend_model == RBEND_MODEL_STRAIGHT_BODY
-                      && settings->model != MODEL_KICK_ONLY;
-    plan->ds_curved = body_length_curved - body_length;
+    MagnetPlan_set_correct_s(
+        plan, rbend_model == RBEND_MODEL_STRAIGHT_BODY && settings->model != MODEL_KICK_ONLY
+    );
+    MagnetPlan_set_ds_curved(plan, body_length_curved - body_length);
 }
 
 
@@ -749,8 +847,8 @@ void MagnetPlan_prepare(
 // (at_exit = 1), in the direction of travel. Returns 0 if the particles were
 // lost (and the magnet must not be tracked).
 GPUFUN
-int8_t magnet_transform(LocalParticle* part0, const MagnetTransform* tr, int8_t at_exit) {
-    if (!at_exit && tr->invalid) {
+int8_t magnet_transform(LocalParticle* part0, const MagnetTransform tr, int8_t at_exit) {
+    if (!at_exit && MagnetTransform_get_invalid(tr)) {
         START_PER_PARTICLE_BLOCK(part0, part);
             LocalParticle_set_state(part, XT_INVALID_THIN_SLICE_TRANSFORM);
         END_PER_PARTICLE_BLOCK;
@@ -759,33 +857,42 @@ int8_t magnet_transform(LocalParticle* part0, const MagnetTransform* tr, int8_t 
     int8_t const backtrack = LocalParticle_check_track_flag(part0, XS_FLAG_BACKTRACK);
     // Backtracking crosses the exit side first
     uint8_t const entry_side = at_exit == backtrack;
-    if (tr->curved) {
+    double const shift_x = MagnetTransform_get_shift_x(tr);
+    double const shift_y = MagnetTransform_get_shift_y(tr);
+    double const shift_s = MagnetTransform_get_shift_s(tr);
+    double const rot_x_rad = MagnetTransform_get_rot_x_rad(tr);
+    double const rot_y_rad = MagnetTransform_get_rot_y_rad(tr);
+    double const rot_s_rad = MagnetTransform_get_rot_s_rad(tr);
+    double const rot_s_rad_no_frame = MagnetTransform_get_rot_s_rad_no_frame(tr);
+    double const anchor = MagnetTransform_get_anchor(tr);
+    double const length = MagnetTransform_get_length(tr);
+    if (MagnetTransform_get_curved(tr)) {
+        double const angle = MagnetTransform_get_angle(tr);
+        double const h = MagnetTransform_get_h(tr);
         if (entry_side) {
             track_misalignment_entry_curved(
-                part0, tr->shift_x, tr->shift_y, tr->shift_s, tr->rot_y_rad, tr->rot_x_rad,
-                tr->rot_s_rad_no_frame, tr->anchor, tr->length, tr->angle, tr->h,
-                tr->rot_s_rad, backtrack
+                part0, shift_x, shift_y, shift_s, rot_y_rad, rot_x_rad,
+                rot_s_rad_no_frame, anchor, length, angle, h, rot_s_rad, backtrack
             );
         }
         else {
             track_misalignment_exit_curved(
-                part0, tr->shift_x, tr->shift_y, tr->shift_s, tr->rot_y_rad, tr->rot_x_rad,
-                tr->rot_s_rad_no_frame, tr->anchor, tr->length, tr->angle, tr->h,
-                tr->rot_s_rad, backtrack
+                part0, shift_x, shift_y, shift_s, rot_y_rad, rot_x_rad,
+                rot_s_rad_no_frame, anchor, length, angle, h, rot_s_rad, backtrack
             );
         }
     }
     else {
         if (entry_side) {
             track_misalignment_entry_straight(
-                part0, tr->shift_x, tr->shift_y, tr->shift_s, tr->rot_y_rad, tr->rot_x_rad,
-                tr->rot_s_rad_no_frame, tr->anchor, tr->length, tr->rot_s_rad, backtrack
+                part0, shift_x, shift_y, shift_s, rot_y_rad, rot_x_rad,
+                rot_s_rad_no_frame, anchor, length, rot_s_rad, backtrack
             );
         }
         else {
             track_misalignment_exit_straight(
-                part0, tr->shift_x, tr->shift_y, tr->shift_s, tr->rot_y_rad, tr->rot_x_rad,
-                tr->rot_s_rad_no_frame, tr->anchor, tr->length, tr->rot_s_rad, backtrack
+                part0, shift_x, shift_y, shift_s, rot_y_rad, rot_x_rad,
+                rot_s_rad_no_frame, anchor, length, rot_s_rad, backtrack
             );
         }
     }
@@ -797,11 +904,11 @@ int8_t magnet_transform(LocalParticle* part0, const MagnetTransform* tr, int8_t 
 // compensating the radiation energy loss 1 + delta of the particle at the
 // entrance of the magnet (the plan then holds the nominal strengths)
 GPUFUN XT_INLINE
-double magnet_taper_factor(LocalParticle* part, const MagnetPlan* plan) {
+double magnet_taper_factor(LocalParticle* part, const MagnetPlan plan) {
 #if !defined(XTRACK_TPSA_TRACK) && !defined(XTRACK_MULTIPOLE_NO_SYNRAD)
-    if (plan->taper_from_delta) return 1. + LocalParticle_get_delta(part);
+    if (MagnetPlan_get_taper_from_delta(plan)) return 1. + LocalParticle_get_delta(part);
 #endif
-    return plan->taper;
+    return MagnetPlan_get_taper(plan);
 }
 
 
@@ -810,30 +917,35 @@ double magnet_taper_factor(LocalParticle* part, const MagnetPlan* plan) {
 // this one function, called from one place in track_line, where it is
 // inlined (faster than a call on GPU, with NVRTC and clang).
 GPUFUN XT_INLINE
-void track_magnet_particles(LocalParticle* part0, const MagnetPlan* plan) {
-    const MagnetTransform* transform = &plan->transform;
-    if (transform->active && !magnet_transform(part0, transform, 0)) {
+void track_magnet_particles(LocalParticle* part0, const MagnetPlan plan) {
+    const MagnetTransform transform = MagnetPlan_getp_transform(plan);
+    const uint8_t transform_active = MagnetTransform_get_active(transform);
+    if (transform_active && !magnet_transform(part0, transform, 0)) {
         return;
     }
 
-    const uint8_t first_active = plan->first_active;
-    const uint8_t second_active = plan->second_active;
-    if (plan->body_active) {
-        const uint8_t correct_s = plan->correct_s;
-        const double ds_curved = plan->ds_curved;
+    const MagnetField field = MagnetPlan_getp_field(plan);
+    const MagnetFace first_face = MagnetPlan_getp_first_face(plan);
+    const MagnetFace second_face = MagnetPlan_getp_second_face(plan);
+    const uint8_t first_active = MagnetPlan_get_first_active(plan);
+    const uint8_t second_active = MagnetPlan_get_second_active(plan);
+    if (MagnetPlan_get_body_active(plan)) {
+        const MagnetBody body = MagnetPlan_getp_body(plan);
+        const uint8_t correct_s = MagnetPlan_get_correct_s(plan);
+        const double ds_curved = MagnetPlan_get_ds_curved(plan);
         double dp_record_exit, dpx_record_exit, dpy_record_exit;
         START_PER_PARTICLE_BLOCK(part0, part)
             ;
             const double taper = magnet_taper_factor(part, plan);
-            if (first_active) MagnetFace_enter_single_particle(part, &plan->first_face, taper);
+            if (first_active) MagnetFace_enter_single_particle(part, first_face, field, taper);
             track_magnet_body_single_particle(
-                part, &plan->body, taper, &dp_record_exit, &dpx_record_exit, &dpy_record_exit
+                part, body, field, taper, &dp_record_exit, &dpx_record_exit, &dpy_record_exit
             );
             if (correct_s) {
                 LocalParticle_add_to_s(part, ds_curved);
                 LocalParticle_add_to_zeta(part, ds_curved);
             }
-            if (second_active) MagnetFace_leave_single_particle(part, &plan->second_face, taper);
+            if (second_active) MagnetFace_leave_single_particle(part, second_face, field, taper);
         END_PER_PARTICLE_BLOCK;
     }
     else {
@@ -841,14 +953,63 @@ void track_magnet_particles(LocalParticle* part0, const MagnetPlan* plan) {
         START_PER_PARTICLE_BLOCK(part0, part)
             ;
             const double taper = magnet_taper_factor(part, plan);
-            if (first_active) MagnetFace_enter_single_particle(part, &plan->first_face, taper);
-            if (second_active) MagnetFace_leave_single_particle(part, &plan->second_face, taper);
+            if (first_active) MagnetFace_enter_single_particle(part, first_face, field, taper);
+            if (second_active) MagnetFace_leave_single_particle(part, second_face, field, taper);
         END_PER_PARTICLE_BLOCK;
     }
 
-    if (transform->active) {
+    if (transform_active) {
         magnet_transform(part0, transform, 1);
     }
 }
+
+#ifdef XTRACK_TPSA_TRACK
+// Call f on the address of every strength of a plan
+template <class F>
+void MagnetPlan_for_each_strength(MagnetPlan plan, F f) {
+    const MagnetField field = MagnetPlan_getp_field(plan);
+    const MagnetBody body = MagnetPlan_getp_body(plan);
+    const MagnetDrift drift = MagnetBody_getp_drift(body);
+    const MagnetKick kick = MagnetBody_getp_kick(body);
+    for (int ii = 0; ii <= MAGNET_K_ORDER; ii++) {
+        f(MagnetField_getp1_knorm(field, ii));
+        f(MagnetField_getp1_kskew(field, ii));
+        f(MagnetKick_getp1_knl_main(kick, ii));
+        f(MagnetKick_getp1_ksl_main(kick, ii));
+    }
+    for (int ii = 0; ii < 2; ii++) {
+        f(MagnetField_getp1_r21(field, ii));
+        f(MagnetField_getp1_r43(field, ii));
+    }
+    f(MagnetField_getp_ks(field));
+    f(MagnetField_getp_k0(field));
+    f(MagnetField_getp_k1(field));
+    f(MagnetField_getp_k1s(field));
+    f(MagnetDrift_getp_k0(drift));
+    f(MagnetDrift_getp_k1(drift));
+    f(MagnetDrift_getp_ks(drift));
+    f(MagnetKick_getp_k0_h_coeff(kick));
+    f(MagnetKick_getp_k1_h_coeff(kick));
+    for (int ii = 0; ii <= MAGNET_MAX_MULTIPOLE_ORDER; ii++) {
+        f(MagnetPlan_getp1_knl_tot(plan, ii));
+        f(MagnetPlan_getp1_ksl_tot(plan, ii));
+    }
+}
+
+// A plan for the time of a TPSA track call, its TPSAs owned here: made after
+// the TPSA default scope (xt_tpsa::default_scope), freed before it ends
+struct MagnetPlanTpsaStorage {
+    alignas(8) char data[MAGNET_PLAN_SIZE] = {};
+    MagnetPlanTpsaStorage() {
+        MagnetPlan_for_each_strength(plan(), [](double* p) { new (p) xt_float_or_tpsa(0.); });
+    }
+    ~MagnetPlanTpsaStorage() {
+        MagnetPlan_for_each_strength(plan(), [](double* p) { XT_FT(p).~xt_float_or_tpsa(); });
+    }
+    MagnetPlanTpsaStorage(const MagnetPlanTpsaStorage&) = delete;
+    MagnetPlanTpsaStorage& operator=(const MagnetPlanTpsaStorage&) = delete;
+    MagnetPlan plan() { return (MagnetPlan)(void*)data; }
+};
+#endif
 
 #endif
